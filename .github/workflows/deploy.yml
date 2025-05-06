@@ -60,8 +60,8 @@ jobs:
           mkdir -p ./deploy/storybook
           # Move Storybook to /storybook subfolder
           cp -r ./storybook-static/* ./deploy/storybook/
-          # Create a simple HTML redirect at the root to the landing page if needed
-          echo '<html><head><meta http-equiv="refresh" content="0; url=/" /></head></html>' > ./deploy/index.html
+          # Create CNAME file for the custom domain
+          echo "ui.bizar.re" > ./deploy/CNAME
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
