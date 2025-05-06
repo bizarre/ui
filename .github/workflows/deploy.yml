@@ -1,0 +1,80 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      # Build the component library and Storybook
+      - name: Install root dependencies
+        run: bun install
+
+      - name: Build component library
+        run: bun run build
+
+      - name: Build Storybook
+        run: bun run build-storybook
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+
+      # Build the landing page (Vike site)
+      - name: Install landing page dependencies
+        working-directory: ./landing
+        run: bun install
+
+      - name: Build Vike site
+        working-directory: ./landing
+        run: bun run build
+
+      # Prepare the deployment directory
+      - name: Prepare deployment directory
+        run: |
+          mkdir -p ./deploy
+          # Move Vike site to root of deployment directory
+          cp -r ./landing/dist/client/* ./deploy/
+          # Ensure Storybook directory exists
+          mkdir -p ./deploy/storybook
+          # Move Storybook to /storybook subfolder
+          cp -r ./storybook-static/* ./deploy/storybook/
+          # Create a simple HTML redirect at the root to the landing page if needed
+          echo '<html><head><meta http-equiv="refresh" content="0; url=/" /></head></html>' > ./deploy/index.html
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./deploy
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
