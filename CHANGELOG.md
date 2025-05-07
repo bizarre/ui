@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/bizarre/ui/compare/v1.0.3...v1.1.0) (2025-05-07)
+
+
+### Features
+
+* default time slice to user timezone ([1d22434](https://github.com/bizarre/ui/commit/1d22434d12609801c8fb5c2e5afd772878ad6a4c))
+
 ## [1.0.3](https://github.com/bizarre/ui/compare/v1.0.2...v1.0.3) (2025-05-07)
 
 
