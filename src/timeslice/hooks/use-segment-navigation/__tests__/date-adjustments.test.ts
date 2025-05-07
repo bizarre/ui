@@ -270,68 +270,12 @@ describe('Date Adjustments', () => {
         const [selStart, selEnd] = lastCallArgs
         expect(selEnd! >= selStart!).toBe(true)
 
-        // Debugging: Check if FormatJS polyfill seems active on Intl.DateTimeFormat
-        // Note: The exact property like __POLYFILLED__ is a guess; FormatJS might not use it.
-        if (
-          typeof (Intl.DateTimeFormat as any).__POLYFILLED__ === 'undefined'
-        ) {
-          console.error(
-            'POLYFILL CHECK: Intl.DateTimeFormat does NOT seem to be polyfilled by FormatJS or does not use __POLYFILLED__ marker.'
-          )
-        } else {
-          console.log(
-            'POLYFILL CHECK: Intl.DateTimeFormat APPEARS to be polyfilled by FormatJS.'
-          )
-        }
-        // It might also be useful to log the constructor string of Intl.DateTimeFormat
-        try {
-          console.log(
-            'POLYFILL CHECK: Intl.DateTimeFormat.toString():',
-            Intl.DateTimeFormat.toString().substring(0, 200)
-          )
-        } catch (_e) {
-          console.log(
-            'POLYFILL CHECK: Could not get Intl.DateTimeFormat.toString(), error:',
-            _e
-          )
-        }
-
+        let newMinuteSegmentSelected = false
         const newSegments = buildSegments(
           newDateRange.startDate!,
           newDateRange.endDate!,
           timeZone
         ).segments
-
-        // Debugging logs
-        const criticalDateForLog = newDateRange.endDate!
-        const includeYearForLog =
-          newDateRange.startDate!.getFullYear() !==
-          newDateRange.endDate!.getFullYear()
-        const optionsForLog: Intl.DateTimeFormatOptions = {
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          timeZone: timeZone,
-          ...(includeYearForLog ? { year: 'numeric' } : {})
-        }
-        // Use a new Intl.DateTimeFormat instance for this specific log to ensure it uses the potentially polyfilled global
-        const loggingFormatter = new Intl.DateTimeFormat('en-US', optionsForLog)
-        const rawPartsForLog =
-          loggingFormatter.formatToParts(criticalDateForLog)
-        console.log(
-          'DEBUG LOG rawPartsForLog for criticalDate:',
-          JSON.stringify(rawPartsForLog, null, 2)
-        )
-        console.log(
-          'DEBUG LOG newSegments:',
-          JSON.stringify(newSegments, null, 2)
-        )
-        console.log('DEBUG LOG selStart:', selStart, 'selEnd:', selEnd)
-        // End Debugging logs
-
-        let newMinuteSegmentSelected = false
         for (const seg of newSegments) {
           if (
             seg.type === 'minute' &&

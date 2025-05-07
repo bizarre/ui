@@ -45,5 +45,32 @@ describe('useSegmentNavigation: Environment Checks', () => {
       })
       expect(formatterWinter.format(utcDateWinter)).toBe('12:00')
     })
+
+    it('Intl.DateTimeFormat().formatToParts() should include year for endDate when spanning years (with FormatJS polyfill)', () => {
+      const endDate = new Date('2024-01-01T01:00:00Z')
+      const timeZone = 'UTC'
+
+      const options: Intl.DateTimeFormatOptions = {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone,
+        year: 'numeric'
+      }
+
+      const formatter = new Intl.DateTimeFormat('en-US', options)
+      const partsForEndDate = formatter.formatToParts(endDate)
+
+      console.log(
+        'Parts for endDate (environment.test.ts):',
+        JSON.stringify(partsForEndDate, null, 2)
+      )
+
+      const yearPart = partsForEndDate.find((part) => part.type === 'year')
+      expect(yearPart).toBeDefined()
+      expect(yearPart?.value).toBe(endDate.getUTCFullYear().toString())
+    })
   })
 })
