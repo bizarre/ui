@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import { useControllableState } from '@radix-ui/react-use-controllable-state'
 
 export type DateRange = {
@@ -13,9 +13,6 @@ type UseTimeSliceStateProps = {
   dateRange?: DateRange
   defaultDateRange?: DateRange
   onDateRangeChange?: (range: DateRange) => void
-  isRelative?: boolean
-  defaultIsRelative?: boolean
-  onIsRelativeChange?: (isRelative: boolean) => void
 }
 
 export function useTimeSliceState({
@@ -50,28 +47,10 @@ export function useTimeSliceState({
     onChange: onDateRangeChangeGuard
   })
 
-  useEffect(() => {
-    if (
-      defaultDateRange &&
-      defaultDateRange.endDate &&
-      new Date().getTime() - defaultDateRange.endDate?.getTime() < 1000 * 60
-    ) {
-      setIsRelative(true)
-    }
-  }, [])
-
-  const [isRelative, setIsRelative] = useControllableState({
-    prop: props.isRelative,
-    defaultProp: props.defaultIsRelative ?? false,
-    onChange: props.onIsRelativeChange
-  })
-
   return {
     open,
     setOpen,
     dateRange,
-    setDateRange,
-    isRelative,
-    setIsRelative
+    setDateRange
   }
 }

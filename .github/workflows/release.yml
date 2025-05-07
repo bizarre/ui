@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: ['CI Tests']
+    types:
+      - completed
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write # To push release tags and updated files like package.json, CHANGELOG.md
+  id-token: write # To enable OIDC for npm provenance (publishing)
+  issues: write # To create/comment on issues/PRs (e.g., by @semantic-release/github)
+  pull-requests: write # To create/comment on issues/PRs (e.g., by @semantic-release/github)
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    # Condition to run the job: either a manual dispatch or a successful completion of 'CI Tests' workflow on the master branch
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all history for all branches and tags, required for semantic-release
+          persist-credentials: false # Recommended for semantic-release to push changes
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Restore Bun cache
+        uses: actions/cache@v4
+        id: bun-cache
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: bunx semantic-release

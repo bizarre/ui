@@ -5,12 +5,12 @@ import type { Scope } from '@radix-ui/react-context'
 import { DismissableLayer } from '@radix-ui/react-dismissable-layer'
 import { Slot } from '@radix-ui/react-slot'
 import { sub, formatDistanceStrict } from 'date-fns'
-import React, { useCallback, useMemo, useId } from 'react'
+import React, { useCallback, useMemo, useId, useState, useEffect } from 'react'
 import { useTimeSliceState, type DateRange } from './hooks/use-time-slice-state'
 import {
   useSegmentNavigation,
   buildSegments
-} from './hooks/use-segment-navigation'
+} from './hooks/use-segment-navigation/use-segment-navigation'
 import { parseDateInput } from './utils/date-parser'
 
 export type TimeZone = keyof typeof Timezone
@@ -28,13 +28,13 @@ type TimeSliceContextValue = {
   onOpenChange?: (open: boolean) => void
   dateRange: DateRange
   setDateRange: (range: DateRange) => void
+  setInternalIsRelative: (isRelative: boolean) => void
   formatInputValue: (args: {
     startDate?: Date
     endDate?: Date
     isRelative: boolean
   }) => string
-  isRelative: boolean
-  setIsRelative: (isRelative: boolean) => void
+  internalIsRelative: boolean
   focusPortal?: () => void
   portalContentRef?: React.RefObject<HTMLDivElement | null>
   inputId?: string
@@ -60,10 +60,6 @@ type TimeSliceProps = ScopedProps<{
   defaultDateRange?: DateRange
   onDateRangeChange?: (range: DateRange) => void
   onDateRangeConfirm?: (range: DateRange) => void
-  isRelative?: boolean
-  defaultIsRelative?: boolean
-  onIsRelativeChange?: (isRelative: boolean) => void
-  onIsRelativeConfirm?: (isRelative: boolean) => void
 }>
 
 const TimeSlice: React.FC<TimeSliceProps> = ({
@@ -71,6 +67,7 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
   __scope,
   formatInput: formatInputProp,
   timeZone = 'UTC',
+  onDateRangeConfirm: onDateRangeConfirmProp,
   ...stateProps
 }) => {
   const inputRef = React.useRef<HTMLInputElement>(null)
@@ -79,28 +76,34 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
     open,
     setOpen,
     dateRange,
-    setDateRange: setDateRangeInternal,
-    isRelative,
-    setIsRelative
+    setDateRange: setDateRangeInternal
   } = useTimeSliceState(stateProps)
+
+  const calculateIsRelative = useCallback((range: DateRange): boolean => {
+    let shouldBeRelative = false
+    if (
+      range.endDate &&
+      new Date().getTime() - range.endDate.getTime() < 1000 * 60
+    ) {
+      if (range.endDate.getTime() - new Date().getTime() <= 1000 * 60) {
+        shouldBeRelative = true
+      }
+    }
+    return shouldBeRelative
+  }, [])
+
+  const [internalIsRelative, setInternalIsRelative] = useState<boolean>(() =>
+    calculateIsRelative(
+      stateProps.dateRange ?? stateProps.defaultDateRange ?? {}
+    )
+  )
 
   const setDateRange = useCallback(
     (range: DateRange) => {
       setDateRangeInternal(range)
-      if (
-        range.endDate &&
-        new Date().getTime() - range.endDate.getTime() < 1000 * 60
-      ) {
-        if (range.endDate.getTime() - new Date().getTime() > 1000 * 60) {
-          setIsRelative(false)
-        } else {
-          setIsRelative(true)
-        }
-      } else {
-        setIsRelative(false)
-      }
+      setInternalIsRelative(calculateIsRelative(range))
     },
-    [setDateRangeInternal, setIsRelative]
+    [setDateRangeInternal, calculateIsRelative]
   )
 
   const defaultFormatInput = useCallback(
@@ -120,10 +123,10 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
         })
         return `Past ${human}`
       } else {
-        return buildSegments(startDate, endDate).text
+        return buildSegments(startDate, endDate, timeZone).text
       }
     },
-    []
+    [timeZone]
   )
 
   const formatInputValue = useMemo(
@@ -142,15 +145,16 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
     }
   }, [])
 
-  React.useEffect(() => {
-    if (inputRef.current && !open) {
-      inputRef.current.value = formatInputValue({
+  useEffect(() => {
+    const inputEl = inputRef.current
+    if (inputEl && !open) {
+      inputEl.value = formatInputValue({
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-        isRelative: isRelative
+        isRelative: internalIsRelative
       })
     }
-  }, [dateRange, isRelative, formatInputValue, open])
+  }, [dateRange, internalIsRelative, formatInputValue, open, timeZone])
 
   const close = useCallback(() => {
     if (open) {
@@ -159,39 +163,26 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
         inputRef.current.value = formatInputValue({
           startDate: dateRange.startDate,
           endDate: dateRange.endDate,
-          isRelative: isRelative
+          isRelative: internalIsRelative
         })
       }
     }
-  }, [open, setOpen, inputRef, dateRange, formatInputValue, isRelative])
+  }, [open, setOpen, inputRef, dateRange, formatInputValue, internalIsRelative])
 
   const uniqueId = useId()
   const inputId = `${uniqueId}-input`
   const portalId = `${uniqueId}-portal`
 
-  // Effect to call onDateRangeConfirm/onIsRelativeConfirm when the portal closes
   const prevOpenRef = React.useRef(open)
-  const onDateRangeConfirmProp = stateProps.onDateRangeConfirm
-  const onIsRelativeConfirmProp = stateProps.onIsRelativeConfirm
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (prevOpenRef.current && !open) {
-      // Portal transitioned from open to closed
       if (onDateRangeConfirmProp && dateRange.startDate && dateRange.endDate) {
         onDateRangeConfirmProp(dateRange)
       }
-      if (onIsRelativeConfirmProp) {
-        onIsRelativeConfirmProp(isRelative)
-      }
     }
     prevOpenRef.current = open
-  }, [
-    open,
-    dateRange,
-    isRelative,
-    onDateRangeConfirmProp,
-    onIsRelativeConfirmProp
-  ])
+  }, [open, dateRange, onDateRangeConfirmProp])
 
   return (
     <DismissableLayer onEscapeKeyDown={close} onPointerDownOutside={close}>
@@ -203,8 +194,8 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
         setOpen={setOpen}
         dateRange={dateRange}
         setDateRange={setDateRange}
-        isRelative={isRelative}
-        setIsRelative={setIsRelative}
+        internalIsRelative={internalIsRelative}
+        setInternalIsRelative={setInternalIsRelative}
         formatInputValue={formatInputValue}
         focusPortal={focusPortal}
         portalContentRef={portalContentRef}
@@ -267,6 +258,7 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
       inputRef: context.inputRef,
       dateRange: context.dateRange,
       setDateRange: context.setDateRange,
+      timeZone: context.timeZone,
       onFocusPortalRequested: context.focusPortal,
       setOpenPortal: context.setOpen
     })
@@ -275,7 +267,7 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
       inputRef: contextInputRef,
       dateRange,
       formatInputValue,
-      isRelative,
+      internalIsRelative,
       open: isOpen,
       setOpen,
       setDateRange,
@@ -286,20 +278,20 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
     React.useEffect(() => {
       const inputEl = contextInputRef.current
       if (inputEl && document.activeElement !== inputEl && !isOpen) {
-        if (dateRange.startDate && dateRange.endDate) {
-          inputEl.value = buildSegments(
-            dateRange.startDate,
-            dateRange.endDate
-          ).text
-        } else {
-          inputEl.value = formatInputValue({
-            startDate: dateRange.startDate,
-            endDate: dateRange.endDate,
-            isRelative: isRelative
-          })
-        }
+        inputEl.value = formatInputValue({
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+          isRelative: internalIsRelative
+        })
       }
-    }, [contextInputRef, dateRange, formatInputValue, isRelative, isOpen])
+    }, [
+      contextInputRef,
+      dateRange,
+      formatInputValue,
+      internalIsRelative,
+      isOpen,
+      context.timeZone
+    ])
 
     const handleFocus = useCallback(() => {
       const wasOpen = isOpen
@@ -312,7 +304,8 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
         if (dateRange.startDate && dateRange.endDate) {
           const canonicalText = buildSegments(
             dateRange.startDate,
-            dateRange.endDate
+            dateRange.endDate,
+            context.timeZone
           ).text
 
           if (wasOpen && inputEl.value !== canonicalText) {
@@ -329,7 +322,7 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
           }, 0)
         })
       }
-    }, [isOpen, setOpen, contextInputRef, dateRange])
+    }, [isOpen, setOpen, contextInputRef, dateRange, context.timeZone])
 
     const handleChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -357,7 +350,7 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
       defaultValue: context.formatInputValue({
         startDate: context.dateRange.startDate,
         endDate: context.dateRange.endDate,
-        isRelative: context.isRelative
+        isRelative: context.internalIsRelative
       }),
       onFocus: handleFocus,
       onChange: handleChange,
@@ -384,7 +377,6 @@ type TimeSlicePortalProps = ScopedProps<{
 const TimeSlicePortal = React.forwardRef<HTMLDivElement, TimeSlicePortalProps>(
   ({ asChild, children, __scope, ariaLabel, ...props }, forwardedRef) => {
     const context = useTimeSliceContext(COMPONENT_NAME, __scope)
-    if (!context.open) return null
 
     const handleKeyDownInPortal = useCallback(
       (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -458,6 +450,7 @@ const TimeSlicePortal = React.forwardRef<HTMLDivElement, TimeSlicePortalProps>(
         position: 'absolute' as const,
         width: '100%',
         zIndex: 10,
+        display: context.open ? undefined : 'none',
         ...props.style
       }
     }
@@ -486,7 +479,7 @@ const TimeSliceShortcut = React.forwardRef<
   HTMLDivElement,
   TimeSliceShortcutProps
 >(({ asChild, children, __scope, duration, ...props }, forwardedRef) => {
-  const { setIsRelative, setDateRange, setOpen, inputRef } =
+  const { setDateRange, setInternalIsRelative, setOpen, inputRef } =
     useTimeSliceContext(COMPONENT_NAME, __scope)
 
   const handleClick = useCallback(
@@ -496,14 +489,14 @@ const TimeSliceShortcut = React.forwardRef<
       const startDate = sub(now, duration)
       const endDate = now
 
-      setIsRelative(true)
+      setInternalIsRelative(true)
       setDateRange({ startDate, endDate })
       setOpen(false)
       if (inputRef.current) {
         inputRef.current.blur()
       }
     },
-    [setIsRelative, setDateRange, setOpen, duration, inputRef]
+    [setDateRange, setInternalIsRelative, setOpen, duration, inputRef]
   )
 
   const optionPropsAria = {

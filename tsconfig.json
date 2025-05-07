@@ -14,10 +14,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
-  },
-  "paths": {
-    "@bizarre/ui/*": ["src/*"]
+    "jsx": "react-jsx",
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    "baseUrl": ".",
+    "paths": {
+      "@bizarre/ui/*": ["src/*"]
+    }
   },
   "include": ["src"]
 }

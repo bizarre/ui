@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo } from 'react'
-import type { DateRange } from './use-time-slice-state'
+import React, { useCallback, useMemo, useEffect, useState } from 'react'
+import type { DateRange } from '../use-time-slice-state'
 import { addMonths, addDays, addHours, addMinutes, addYears } from 'date-fns'
 
 export type DateSegmentType =
@@ -21,7 +21,8 @@ export interface Segment {
 
 export function buildSegments(
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  timeZone: string
 ): { segments: Segment[]; text: string } {
   const includeYear = startDate.getFullYear() !== endDate.getFullYear()
   const options: Intl.DateTimeFormatOptions = {
@@ -30,6 +31,7 @@ export function buildSegments(
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+    timeZone,
     ...(includeYear ? { year: 'numeric' } : {})
   }
   const formatter = new Intl.DateTimeFormat('en-US', options)
@@ -81,7 +83,8 @@ export function buildSegments(
 export function adjustDateForSegment(
   date: Date,
   type: DateSegmentType,
-  delta: number
+  delta: number,
+  timeZone: string
 ): Date {
   switch (type) {
     case 'year':
@@ -95,8 +98,15 @@ export function adjustDateForSegment(
     case 'minute':
       return addMinutes(date, delta)
     case 'dayPeriod': {
-      const current = date.getHours()
-      const flip = current < 12 ? 12 : -12
+      const hourInTimeZone = parseInt(
+        new Intl.DateTimeFormat('en-US', {
+          hour: 'numeric',
+          hour12: false,
+          timeZone
+        }).format(date),
+        10
+      )
+      const flip = hourInTimeZone < 12 ? 12 : -12
       return addHours(date, flip)
     }
     default:
@@ -108,6 +118,7 @@ type UseSegmentNavigationProps = {
   inputRef: React.RefObject<HTMLInputElement | null>
   dateRange: DateRange
   setDateRange: (range: DateRange) => void
+  timeZone: string
   onFocusPortalRequested?: () => void
   setOpenPortal?: (open: boolean) => void
 }
@@ -116,11 +127,13 @@ export function useSegmentNavigation({
   inputRef,
   dateRange,
   setDateRange,
+  timeZone,
   onFocusPortalRequested,
   setOpenPortal
 }: UseSegmentNavigationProps) {
   const segmentsRef = React.useRef<Segment[]>([])
   const activeIdxRef = React.useRef<number>(-1)
+  const [segmentVersion, setSegmentVersion] = useState(0)
 
   const selectSegment = useCallback(
     (idx: number) => {
@@ -135,16 +148,21 @@ export function useSegmentNavigation({
     [inputRef]
   )
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (dateRange.startDate && dateRange.endDate) {
-      const { segments } = buildSegments(dateRange.startDate, dateRange.endDate)
+      const { segments } = buildSegments(
+        dateRange.startDate,
+        dateRange.endDate,
+        timeZone
+      )
       segmentsRef.current = segments
       activeIdxRef.current = -1
     } else {
       segmentsRef.current = []
       activeIdxRef.current = -1
     }
-  }, [dateRange.startDate, dateRange.endDate])
+    setSegmentVersion((v) => v + 1)
+  }, [dateRange.startDate, dateRange.endDate, timeZone])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -174,9 +192,10 @@ export function useSegmentNavigation({
         } else {
           const canonicalText = buildSegments(
             dateRange.startDate,
-            dateRange.endDate
+            dateRange.endDate,
+            timeZone
           ).text
-          if (inputEl.value !== canonicalText) {
+          if (inputEl && inputEl.value !== canonicalText) {
             shouldTabToPortal = true
           }
         }
@@ -248,7 +267,6 @@ export function useSegmentNavigation({
         }
       }
 
-      // tabbing between start/end date segments
       if (key === 'Tab' && !e.shiftKey) {
         e.preventDefault()
         const startRangeTab = getCombinedRange('start')
@@ -265,7 +283,6 @@ export function useSegmentNavigation({
         return
       }
 
-      // shift+tab between end/start date segments
       if (key === 'Tab' && e.shiftKey) {
         e.preventDefault()
         const startRangeTab = getCombinedRange('start')
@@ -482,23 +499,38 @@ export function useSegmentNavigation({
 
         activeIdxRef.current = targetIdx
 
-        const delta = key === 'ArrowUp' ? 1 : -1
+        const deltaVal = key === 'ArrowUp' ? 1 : -1
         let newStart = dateRange.startDate!
         let newEnd = dateRange.endDate!
 
         if (seg.dateKey === 'start') {
-          newStart = adjustDateForSegment(dateRange.startDate!, seg.type, delta)
+          newStart = adjustDateForSegment(
+            dateRange.startDate!,
+            seg.type,
+            deltaVal,
+            timeZone
+          )
         } else {
-          newEnd = adjustDateForSegment(dateRange.endDate!, seg.type, delta)
+          newEnd = adjustDateForSegment(
+            dateRange.endDate!,
+            seg.type,
+            deltaVal,
+            timeZone
+          )
         }
 
-        const { text, segments: newSegments } = buildSegments(newStart, newEnd)
+        const { text, segments: newSegments } = buildSegments(
+          newStart,
+          newEnd,
+          timeZone
+        )
         if (inputEl) {
           const selectionStartOffset = inputEl.selectionStart! - seg.start
           const selectionEndOffset = inputEl.selectionEnd! - seg.start
 
           inputEl.value = text
           segmentsRef.current = newSegments
+          setSegmentVersion((v) => v + 1)
 
           const updatedSeg = newSegments[targetIdx]
           if (updatedSeg) {
@@ -515,10 +547,19 @@ export function useSegmentNavigation({
             inputEl.setSelectionRange(finalSelStart, finalSelEnd)
             activeIdxRef.current = targetIdx
           } else {
-            selectSegment(targetIdx)
+            if (targetIdx < newSegments.length) {
+              selectSegment(targetIdx)
+            } else {
+              const firstNavIdx = newSegments.findIndex(
+                (s) => s.type !== 'literal'
+              )
+              if (firstNavIdx !== -1) selectSegment(firstNavIdx)
+              else inputEl.setSelectionRange(0, 0)
+            }
           }
         } else {
           segmentsRef.current = newSegments
+          setSegmentVersion((v) => v + 1)
         }
 
         setDateRange({ startDate: newStart, endDate: newEnd })
@@ -531,7 +572,8 @@ export function useSegmentNavigation({
       setDateRange,
       selectSegment,
       onFocusPortalRequested,
-      setOpenPortal
+      setOpenPortal,
+      timeZone
     ]
   )
 
@@ -551,6 +593,14 @@ export function useSegmentNavigation({
       selectFirstSegment,
       segments: segmentsRef.current
     }),
-    [handleKeyDown, selectSegment, selectFirstSegment]
+    [
+      handleKeyDown,
+      selectSegment,
+      selectFirstSegment,
+      dateRange.startDate,
+      dateRange.endDate,
+      segmentVersion,
+      timeZone
+    ]
   )
 }

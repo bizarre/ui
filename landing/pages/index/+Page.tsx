@@ -11,6 +11,7 @@ import {
   ArrowLeftRight
 } from 'lucide-react'
 import { ClientOnly } from 'vike-react/ClientOnly'
+import packageJson from '../../../package.json'
 
 export default function Page() {
   return (
@@ -30,7 +31,7 @@ export default function Page() {
         <header className="mb-20">
           <div className="inline-flex items-center rounded-full px-3 py-1 mb-6 text-xs font-medium bg-zinc-900/80 text-zinc-400 border border-zinc-800 backdrop-blur-sm">
             <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
-            <span>Version 0.1.0</span>
+            <span>Version {packageJson.version}</span>
           </div>
 
           <h1 className="text-5xl font-bold text-white mb-5 tracking-tight leading-tight">

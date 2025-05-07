@@ -1,8 +1,12 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [master]
+  workflow_run:
+    workflows: ['CI Tests']
+    types:
+      - completed
+    branches:
+      - master
   workflow_dispatch:
 
 permissions:
@@ -17,6 +21,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +33,15 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
+
+      - name: Restore Bun cache
+        uses: actions/cache@v4
+        id: bun-cache # Give it an id to check if cache was hit later if needed
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
 
       # Build the component library and Storybook
       - name: Install root dependencies
