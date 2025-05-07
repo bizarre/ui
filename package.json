@@ -1,6 +1,6 @@
 {
   "name": "@bizarre/ui",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Headless component library for the weird parts of UI.",
   "private": false,
   "main": "./dist/bizarre-ui.es.js",
