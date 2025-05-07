@@ -33,7 +33,7 @@
     "vite",
     "bizarre"
   ],
-  "homepage": "https://github.com/bizarre/ui#readme",
+  "homepage": "https://ui.bizar.re",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bizarre/ui.git"
