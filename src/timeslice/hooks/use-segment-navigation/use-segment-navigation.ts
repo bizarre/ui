@@ -1,6 +1,9 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react'
 import type { DateRange } from '../use-time-slice-state'
 import { addMonths, addDays, addHours, addMinutes, addYears } from 'date-fns'
+import '@formatjs/intl-datetimeformat/polyfill'
+import '@formatjs/intl-datetimeformat/locale-data/en'
+import '@formatjs/intl-datetimeformat/add-all-tz'
 
 export type DateSegmentType =
   | 'month'
@@ -44,7 +47,7 @@ export function buildSegments(
   const textParts: string[] = []
 
   function processParts(
-    parts: Intl.DateTimeFormatPart[],
+    parts: Intl.DateTimeFormatPart[], // Use native TS type, polyfill should conform or we adjust here
     dateKey: 'start' | 'end'
   ) {
     for (const p of parts) {
@@ -57,9 +60,33 @@ export function buildSegments(
 
       const len = p.value.length
       textParts.push(p.value)
-      if (p.type !== 'literal') {
+
+      const partTypeFromFormatter = p.type as string // Treat as string initially
+      let mappedType: DateSegmentType
+
+      // Map from Formatter's part type to our DateSegmentType
+      switch (partTypeFromFormatter) {
+        case 'month':
+        case 'day':
+        case 'year':
+        case 'hour':
+        case 'minute':
+        case 'literal':
+          mappedType = partTypeFromFormatter as DateSegmentType
+          break
+        case 'ampm': // FormatJS might use 'ampm' for dayPeriod
+        case 'dayPeriod': // Native Intl uses 'dayPeriod'
+          mappedType = 'dayPeriod'
+          break
+        default:
+          mappedType = partTypeFromFormatter as DateSegmentType // Attempt direct cast, may need 'unknown'
+          // console.warn(`Unknown segment part type from formatter: ${partTypeFromFormatter}, value: ${p.value}`);
+          break
+      }
+
+      if (mappedType !== 'literal') {
         segments.push({
-          type: p.type as DateSegmentType,
+          type: mappedType,
           value: p.value,
           dateKey,
           start: cursor,
