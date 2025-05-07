@@ -559,30 +559,76 @@ export function useSegmentNavigation({
           segmentsRef.current = newSegments
           setSegmentVersion((v) => v + 1)
 
-          const updatedSeg = newSegments[targetIdx]
-          if (updatedSeg) {
-            const newSelStart = Math.max(
-              updatedSeg.start,
-              Math.min(updatedSeg.end, updatedSeg.start + selectionStartOffset)
-            )
-            const newSelEnd = Math.max(
-              updatedSeg.start,
-              Math.min(updatedSeg.end, updatedSeg.start + selectionEndOffset)
-            )
-            const finalSelStart = Math.min(newSelStart, newSelEnd)
-            const finalSelEnd = Math.max(newSelStart, newSelEnd)
-            inputEl.setSelectionRange(finalSelStart, finalSelEnd)
-            activeIdxRef.current = targetIdx
+          let newActiveSegmentIdx = -1
+
+          // 1. Try to find the semantically equivalent segment (same type, same dateKey)
+          const originalSegType = seg.type
+          const originalSegDateKey = seg.dateKey
+          const equivalentNewSegmentIdx = newSegments.findIndex(
+            (s) =>
+              s.type === originalSegType && s.dateKey === originalSegDateKey
+          )
+
+          if (equivalentNewSegmentIdx !== -1) {
+            newActiveSegmentIdx = equivalentNewSegmentIdx
           } else {
-            if (targetIdx < newSegments.length) {
-              selectSegment(targetIdx)
+            // 2. Fallback: Try to find a segment at the original index if it's still valid and navigable
+            //    This helps if the type changed but the position is still somewhat relevant.
+            if (
+              targetIdx < newSegments.length &&
+              newSegments[targetIdx]?.type !== 'literal'
+            ) {
+              newActiveSegmentIdx = targetIdx
             } else {
-              const firstNavIdx = newSegments.findIndex(
+              // 3. Fallback: Select the first navigable segment in the new list
+              const firstNavigableNewIdx = newSegments.findIndex(
                 (s) => s.type !== 'literal'
               )
-              if (firstNavIdx !== -1) selectSegment(firstNavIdx)
-              else inputEl.setSelectionRange(0, 0)
+              if (firstNavigableNewIdx !== -1) {
+                newActiveSegmentIdx = firstNavigableNewIdx
+              }
             }
+          }
+
+          if (newActiveSegmentIdx !== -1) {
+            const segmentToSelect = newSegments[newActiveSegmentIdx]
+
+            // If the segment type and dateKey are the same as the original adjusted segment,
+            // try to restore the partial selection. Otherwise, select the whole segment.
+            if (
+              segmentToSelect.type === originalSegType &&
+              segmentToSelect.dateKey === originalSegDateKey
+            ) {
+              const newSelStart = Math.max(
+                segmentToSelect.start,
+                Math.min(
+                  segmentToSelect.end,
+                  segmentToSelect.start + selectionStartOffset
+                )
+              )
+              const newSelEnd = Math.max(
+                segmentToSelect.start,
+                Math.min(
+                  segmentToSelect.end,
+                  segmentToSelect.start + selectionEndOffset
+                )
+              )
+              // Ensure start is not after end, especially if original selection was a caret (start === end)
+              const finalSelStart = Math.min(newSelStart, newSelEnd)
+              const finalSelEnd = Math.max(newSelStart, newSelEnd)
+              inputEl.setSelectionRange(finalSelStart, finalSelEnd)
+            } else {
+              // Segment type/dateKey changed, or it's a fallback to a different segment, so select fully.
+              inputEl.setSelectionRange(
+                segmentToSelect.start,
+                segmentToSelect.end
+              )
+            }
+            activeIdxRef.current = newActiveSegmentIdx
+          } else {
+            // 4. Ultimate Fallback: No navigable segment found, clear selection or go to start
+            inputEl.setSelectionRange(0, 0)
+            activeIdxRef.current = -1
           }
         } else {
           segmentsRef.current = newSegments

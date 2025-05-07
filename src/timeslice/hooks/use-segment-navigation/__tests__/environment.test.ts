@@ -63,11 +63,6 @@ describe('useSegmentNavigation: Environment Checks', () => {
       const formatter = new Intl.DateTimeFormat('en-US', options)
       const partsForEndDate = formatter.formatToParts(endDate)
 
-      console.log(
-        'Parts for endDate (environment.test.ts):',
-        JSON.stringify(partsForEndDate, null, 2)
-      )
-
       const yearPart = partsForEndDate.find((part) => part.type === 'year')
       expect(yearPart).toBeDefined()
       expect(yearPart?.value).toBe(endDate.getUTCFullYear().toString())
