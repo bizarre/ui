@@ -36,7 +36,19 @@ export default defineConfig({
           : `${entryName}/index.${format}.js`
     },
     rollupOptions: {
-      external: ['react', 'react-dom'],
+      external: [
+        'react',
+        'react-dom',
+        '@radix-ui/react-compose-refs',
+        '@radix-ui/react-context',
+        '@radix-ui/react-dismissable-layer',
+        '@radix-ui/react-slot',
+        '@radix-ui/react-use-controllable-state',
+        'chrono-node',
+        'date-fns',
+        'timezone-enum',
+        '@formatjs/intl-datetimeformat'
+      ],
       output: {
         preserveModules: true,
         preserveModulesRoot: 'src',
