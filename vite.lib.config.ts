@@ -19,14 +19,19 @@ const entries = {
 }
 
 export default defineConfig({
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('production')
+  },
   plugins: [
     react(),
     dts({
       entryRoot: 'src',
-      outDir: 'dist'
+      outDir: 'dist',
+      rollupTypes: true
     })
   ],
   build: {
+    sourcemap: false,
     lib: {
       entry: entries,
       formats: ['es', 'cjs'],
@@ -37,8 +42,8 @@ export default defineConfig({
     },
     rollupOptions: {
       external: [
-        'react',
-        'react-dom',
+        /^react($|\/.*)/,
+        /^react-dom($|\/.*)/,
         '@radix-ui/react-compose-refs',
         '@radix-ui/react-context',
         '@radix-ui/react-dismissable-layer',
@@ -47,7 +52,7 @@ export default defineConfig({
         'chrono-node',
         'date-fns',
         'timezone-enum',
-        '@formatjs/intl-datetimeformat'
+        /^@formatjs($|\/.*)/
       ],
       output: {
         preserveModules: true,
