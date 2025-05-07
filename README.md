@@ -11,17 +11,7 @@ Headless component library for the weird parts of UI.
 You can install `@bizarre/ui` using your favorite package manager:
 
 ```bash
-# Bun
 bun add @bizarre/ui
-
-# npm
-npm install @bizarre/ui
-
-# yarn
-yarn add @bizarre/ui
-
-# pnpm
-pnpm add @bizarre/ui
 ```
 
 ## Components
