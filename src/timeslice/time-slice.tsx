@@ -119,7 +119,7 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
       if (!startDate || !endDate) return ''
       if (isRelative && endDate > startDate) {
         const human = formatDistanceStrict(startDate, endDate, {
-          roundingMethod: 'floor'
+          roundingMethod: 'round'
         })
         return `Past ${human}`
       } else {
@@ -188,7 +188,7 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
     <DismissableLayer onEscapeKeyDown={close} onPointerDownOutside={close}>
       <TimeSliceProvider
         scope={__scope}
-        timeZone={timeZone}
+        timeZone={timeZone as TimeZone}
         inputRef={inputRef}
         open={open}
         setOpen={setOpen}
