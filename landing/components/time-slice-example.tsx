@@ -53,22 +53,22 @@ export default function TimeSliceExample() {
       </TimeSlice.Trigger>
       <TimeSlice.Portal className="w-[280px] bg-zinc-900 border border-zinc-700 rounded-sm mt-1 p-2 flex flex-col gap-1.5 text-sm">
         <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
-          <div className="hover:bg-zinc-800 p-1.5 rounded-sm text-zinc-300 cursor-pointer">
+          <div className="hover:bg-zinc-800 focus:bg-zinc-800 p-1.5 rounded-sm text-zinc-300 cursor-pointer">
             15 minutes
           </div>
         </TimeSlice.Shortcut>
         <TimeSlice.Shortcut duration={{ hours: 1 }} asChild>
-          <div className="hover:bg-zinc-800 p-1.5 rounded-sm text-zinc-300 cursor-pointer">
+          <div className="hover:bg-zinc-800 focus:bg-zinc-800 p-1.5 rounded-sm text-zinc-300 cursor-pointer">
             1 hour
           </div>
         </TimeSlice.Shortcut>
         <TimeSlice.Shortcut duration={{ days: 1 }} asChild>
-          <div className="hover:bg-zinc-800 p-1.5 rounded-sm text-zinc-300 cursor-pointer">
+          <div className="hover:bg-zinc-800 focus:bg-zinc-800 p-1.5 rounded-sm text-zinc-300 cursor-pointer">
             1 day
           </div>
         </TimeSlice.Shortcut>
         <TimeSlice.Shortcut duration={{ months: 1 }} asChild>
-          <div className="hover:bg-zinc-800 p-1.5 rounded-sm text-zinc-300 cursor-pointer">
+          <div className="hover:bg-zinc-800 focus:bg-zinc-800 p-1.5 rounded-sm text-zinc-300 cursor-pointer">
             1 month
           </div>
         </TimeSlice.Shortcut>

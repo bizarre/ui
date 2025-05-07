@@ -108,12 +108,16 @@ type UseSegmentNavigationProps = {
   inputRef: React.RefObject<HTMLInputElement | null>
   dateRange: DateRange
   setDateRange: (range: DateRange) => void
+  onFocusPortalRequested?: () => void
+  setOpenPortal?: (open: boolean) => void
 }
 
 export function useSegmentNavigation({
   inputRef,
   dateRange,
-  setDateRange
+  setDateRange,
+  onFocusPortalRequested,
+  setOpenPortal
 }: UseSegmentNavigationProps) {
   const segmentsRef = React.useRef<Segment[]>([])
   const activeIdxRef = React.useRef<number>(-1)
@@ -135,28 +139,202 @@ export function useSegmentNavigation({
     if (dateRange.startDate && dateRange.endDate) {
       const { segments } = buildSegments(dateRange.startDate, dateRange.endDate)
       segmentsRef.current = segments
+      activeIdxRef.current = -1
     } else {
       segmentsRef.current = []
+      activeIdxRef.current = -1
     }
   }, [dateRange.startDate, dateRange.endDate])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       const inputEl = inputRef.current
-      if (!inputEl || !dateRange.startDate || !dateRange.endDate) return
+
+      if (!inputEl) {
+        if (e.key === 'ArrowDown' && onFocusPortalRequested) {
+          const tempInput = e.target as HTMLInputElement
+          if (
+            tempInput.selectionStart === 0 &&
+            tempInput.selectionEnd === tempInput.value.length &&
+            tempInput.value.length > 0
+          ) {
+            e.preventDefault()
+            onFocusPortalRequested()
+          }
+        }
+        return
+      }
+
+      if (!dateRange.startDate || !dateRange.endDate) {
+        if (
+          !(
+            e.key === 'ArrowDown' ||
+            e.key === 'ArrowLeft' ||
+            e.key === 'ArrowRight'
+          )
+        ) {
+          return
+        }
+      }
 
       const key = e.key
       const segments = segmentsRef.current
-      if (segments.length === 0) return
+
+      if (
+        segments.length === 0 &&
+        !(key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight')
+      )
+        return
+
+      const getCombinedRange = (dateKey: 'start' | 'end') => {
+        const relevantSegments = segments.filter(
+          (s) => s.dateKey === dateKey && s.type !== 'literal'
+        )
+        if (relevantSegments.length === 0) return null
+        const minStart = Math.min(...relevantSegments.map((s) => s.start))
+        const maxEnd = Math.max(...relevantSegments.map((s) => s.end))
+        return { start: minStart, end: maxEnd }
+      }
+
+      const selStart = inputEl.selectionStart!
+      const selEnd = inputEl.selectionEnd!
+      const inputValueLength = inputEl.value.length
+      const isInputFullySelected =
+        selStart === 0 && selEnd === inputValueLength && inputValueLength > 0
+      const isInputEmpty = inputValueLength === 0
+
+      if (key === 'Enter') {
+        e.preventDefault()
+        if (setOpenPortal) {
+          setOpenPortal(false)
+        }
+        inputEl.blur()
+        return
+      }
+
+      if ((isInputFullySelected || isInputEmpty) && onFocusPortalRequested) {
+        if (key === 'ArrowDown') {
+          e.preventDefault()
+          onFocusPortalRequested()
+          return
+        }
+        if (key === 'Tab' && !e.shiftKey) {
+          e.preventDefault()
+          onFocusPortalRequested()
+          return
+        }
+      }
+
+      // tabbing between start/end date segments
+      if (key === 'Tab' && !e.shiftKey) {
+        e.preventDefault()
+        const startRangeTab = getCombinedRange('start')
+        const endRangeTab = getCombinedRange('end')
+
+        if (!startRangeTab || !endRangeTab) return
+
+        if (selStart === startRangeTab.start && selEnd === startRangeTab.end) {
+          inputEl.setSelectionRange(endRangeTab.start, endRangeTab.end)
+        } else {
+          inputEl.setSelectionRange(startRangeTab.start, startRangeTab.end)
+        }
+        activeIdxRef.current = -1
+        return
+      }
+
+      // shift+tab between end/start date segments
+      if (key === 'Tab' && e.shiftKey) {
+        e.preventDefault()
+        const startRangeTab = getCombinedRange('start')
+        const endRangeTab = getCombinedRange('end')
+
+        if (!startRangeTab || !endRangeTab) return
+
+        if (selStart === endRangeTab.start && selEnd === endRangeTab.end) {
+          inputEl.setSelectionRange(startRangeTab.start, startRangeTab.end)
+        } else {
+          inputEl.setSelectionRange(endRangeTab.start, endRangeTab.end)
+        }
+        activeIdxRef.current = -1
+        return
+      }
+
+      const findFirstNavigableSegmentIndex = (
+        dateKey: 'start' | 'end'
+      ): number => {
+        for (let i = 0; i < segments.length; i++) {
+          if (
+            segments[i].dateKey === dateKey &&
+            segments[i].type !== 'literal'
+          ) {
+            return i
+          }
+        }
+        return -1
+      }
+
+      const findLastNavigableSegmentIndex = (
+        dateKey: 'start' | 'end'
+      ): number => {
+        for (let i = segments.length - 1; i >= 0; i--) {
+          if (
+            segments[i].dateKey === dateKey &&
+            segments[i].type !== 'literal'
+          ) {
+            return i
+          }
+        }
+        return -1
+      }
+
+      const startRangeNav = getCombinedRange('start')
+      const endRangeNav = getCombinedRange('end')
+
+      if (
+        startRangeNav &&
+        selStart === startRangeNav.start &&
+        selEnd === startRangeNav.end
+      ) {
+        if (key === 'ArrowLeft') {
+          e.preventDefault()
+          const firstIdx = findFirstNavigableSegmentIndex('start')
+          if (firstIdx !== -1) selectSegment(firstIdx)
+          return
+        }
+        if (key === 'ArrowRight') {
+          e.preventDefault()
+          const lastIdx = findLastNavigableSegmentIndex('start')
+          if (lastIdx !== -1) selectSegment(lastIdx)
+          return
+        }
+      } else if (
+        endRangeNav &&
+        selStart === endRangeNav.start &&
+        selEnd === endRangeNav.end
+      ) {
+        if (key === 'ArrowLeft') {
+          e.preventDefault()
+          const firstIdx = findFirstNavigableSegmentIndex('end')
+          if (firstIdx !== -1) selectSegment(firstIdx)
+          return
+        }
+        if (key === 'ArrowRight') {
+          e.preventDefault()
+          const lastIdx = findLastNavigableSegmentIndex('end')
+          if (lastIdx !== -1) selectSegment(lastIdx)
+          return
+        }
+      }
 
       if (key === 'ArrowLeft' || key === 'ArrowRight') {
         e.preventDefault()
-        const selStart = inputEl.selectionStart!
-        const selEnd = inputEl.selectionEnd!
+        if (!inputEl) return
 
-        const isFullySelected =
-          selStart === 0 && selEnd === inputEl.value.length
-        if (isFullySelected) {
+        const isGenericInputFullySelected =
+          inputEl.selectionStart === 0 &&
+          inputEl.selectionEnd === inputEl.value.length
+
+        if (isGenericInputFullySelected) {
           if (key === 'ArrowLeft') {
             inputEl.setSelectionRange(0, 0)
           } else {
@@ -249,6 +427,22 @@ export function useSegmentNavigation({
       } else if (key === 'ArrowUp' || key === 'ArrowDown') {
         e.preventDefault()
 
+        const startRangeNav = getCombinedRange('start')
+        const endRangeNav = getCombinedRange('end')
+
+        const isFullStartDateSelected =
+          startRangeNav &&
+          selStart === startRangeNav.start &&
+          selEnd === startRangeNav.end
+        const isFullEndDateSelected =
+          endRangeNav &&
+          selStart === endRangeNav.start &&
+          selEnd === endRangeNav.end
+
+        if (isFullStartDateSelected || isFullEndDateSelected) {
+          return
+        }
+
         const pos = inputEl.selectionStart!
         let targetIdx = segments.findIndex(
           (s) => s.type !== 'literal' && pos >= s.start && pos <= s.end
@@ -312,7 +506,9 @@ export function useSegmentNavigation({
       dateRange.startDate,
       dateRange.endDate,
       setDateRange,
-      selectSegment
+      selectSegment,
+      onFocusPortalRequested,
+      setOpenPortal
     ]
   )
 

@@ -5,7 +5,7 @@ import type { Scope } from '@radix-ui/react-context'
 import { DismissableLayer } from '@radix-ui/react-dismissable-layer'
 import { Slot } from '@radix-ui/react-slot'
 import { sub, formatDistanceStrict } from 'date-fns'
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useId } from 'react'
 import { useTimeSliceState, type DateRange } from './hooks/use-time-slice-state'
 import {
   useSegmentNavigation,
@@ -35,6 +35,10 @@ type TimeSliceContextValue = {
   }) => string
   isRelative: boolean
   setIsRelative: (isRelative: boolean) => void
+  focusPortal?: () => void
+  portalContentRef?: React.RefObject<HTMLDivElement | null>
+  inputId?: string
+  portalId?: string
 }
 
 const [TimeSliceProvider, useTimeSliceContext] =
@@ -68,6 +72,7 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
   ...stateProps
 }) => {
   const inputRef = React.useRef<HTMLInputElement>(null)
+  const portalContentRef = React.useRef<HTMLDivElement>(null)
   const {
     open,
     setOpen,
@@ -124,6 +129,17 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
     [formatInputProp, defaultFormatInput]
   )
 
+  const focusPortal = useCallback(() => {
+    if (portalContentRef.current) {
+      const firstFocusable = portalContentRef.current.querySelector(
+        '[data-shortcut-item="true"]:not([disabled])'
+      ) as HTMLElement | null
+      if (firstFocusable) {
+        firstFocusable.focus()
+      }
+    }
+  }, [])
+
   React.useEffect(() => {
     if (inputRef.current && !open) {
       inputRef.current.value = formatInputValue({
@@ -147,6 +163,10 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
     }
   }, [open, setOpen, inputRef, dateRange, formatInputValue, isRelative])
 
+  const uniqueId = useId()
+  const inputId = `${uniqueId}-input`
+  const portalId = `${uniqueId}-portal`
+
   return (
     <DismissableLayer onEscapeKeyDown={close} onPointerDownOutside={close}>
       <TimeSliceProvider
@@ -160,6 +180,10 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
         isRelative={isRelative}
         setIsRelative={setIsRelative}
         formatInputValue={formatInputValue}
+        focusPortal={focusPortal}
+        portalContentRef={portalContentRef}
+        inputId={inputId}
+        portalId={portalId}
       >
         <div style={{ position: 'relative' }}>{children}</div>
       </TimeSliceProvider>
@@ -216,7 +240,9 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
     const { handleKeyDown } = useSegmentNavigation({
       inputRef: context.inputRef,
       dateRange: context.dateRange,
-      setDateRange: context.setDateRange
+      setDateRange: context.setDateRange,
+      onFocusPortalRequested: context.focusPortal,
+      setOpenPortal: context.setOpen
     })
 
     const {
@@ -224,9 +250,11 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
       dateRange,
       formatInputValue,
       isRelative,
-      open,
+      open: isOpen,
       setOpen,
-      setDateRange
+      setDateRange,
+      inputId: contextInputId,
+      portalId: contextPortalId
     } = context
 
     React.useEffect(() => {
@@ -248,7 +276,7 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
     }, [contextInputRef, dateRange, formatInputValue, isRelative])
 
     const handleFocus = useCallback(() => {
-      if (!open) {
+      if (!isOpen) {
         setOpen(true)
       }
 
@@ -262,7 +290,7 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
           }, 0)
         })
       }
-    }, [open, setOpen, contextInputRef, dateRange])
+    }, [isOpen, setOpen, contextInputRef, dateRange])
 
     const handleChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -278,8 +306,13 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
       [setDateRange]
     )
 
-    const inputProps = {
+    const inputPropsAria = {
       ...props,
+      id: contextInputId,
+      role: 'combobox',
+      'aria-haspopup': 'listbox' as const,
+      'aria-expanded': isOpen,
+      'aria-controls': isOpen ? contextPortalId : undefined,
       ref: composedInputRef,
       value: undefined,
       defaultValue: context.formatInputValue({
@@ -295,7 +328,7 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
     const Comp = asChild ? Slot : 'input'
 
     return (
-      <Comp {...inputProps} ref={composedInputRef}>
+      <Comp {...inputPropsAria} ref={composedInputRef}>
         {children}
       </Comp>
     )
@@ -305,17 +338,83 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
 type TimeSlicePortalProps = ScopedProps<{
   children: React.ReactNode
   asChild?: boolean
+  ariaLabel?: string
 }> &
   React.HTMLAttributes<HTMLDivElement>
 
 const TimeSlicePortal = React.forwardRef<HTMLDivElement, TimeSlicePortalProps>(
-  ({ asChild, children, __scope, ...props }, forwardedRef) => {
+  ({ asChild, children, __scope, ariaLabel, ...props }, forwardedRef) => {
     const context = useTimeSliceContext(COMPONENT_NAME, __scope)
     if (!context.open) return null
 
-    const portalProps = {
+    const handleKeyDownInPortal = useCallback(
+      (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (!context.portalContentRef?.current) return
+
+        const items = Array.from(
+          context.portalContentRef.current.querySelectorAll(
+            '[data-shortcut-item="true"]:not([disabled])'
+          )
+        ) as HTMLElement[]
+
+        if (items.length === 0) return
+
+        const currentFocusedElement = document.activeElement as HTMLElement
+        const currentIndex = items.findIndex(
+          (item) => item === currentFocusedElement
+        )
+
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          context.setOpen(false)
+          context.inputRef.current?.focus()
+          return
+        }
+
+        if (e.key === 'Enter' && currentIndex !== -1) {
+          e.preventDefault()
+          items[currentIndex].click()
+          return
+        }
+
+        let nextIndex = currentIndex
+
+        if (e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey)) {
+          e.preventDefault()
+          if (e.key === 'Tab' && currentIndex === items.length - 1) {
+            context.inputRef.current?.focus()
+            context.inputRef.current?.select()
+            return
+          }
+          nextIndex =
+            currentIndex === -1 ? 0 : (currentIndex + 1) % items.length
+        } else if (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)) {
+          e.preventDefault()
+          if (e.key === 'Tab' && e.shiftKey && currentIndex === 0) {
+            context.inputRef.current?.focus()
+            context.inputRef.current?.select()
+            return
+          }
+          nextIndex =
+            currentIndex === -1
+              ? items.length - 1
+              : (currentIndex - 1 + items.length) % items.length
+        }
+
+        if (nextIndex !== currentIndex && items[nextIndex]) {
+          items[nextIndex].focus()
+        }
+      },
+      [context.portalContentRef, context.setOpen, context.inputRef]
+    )
+
+    const portalPropsAria = {
       ...props,
-      ref: forwardedRef,
+      id: context.portalId,
+      role: 'listbox',
+      'aria-label': ariaLabel,
+      ref: composeRefs(forwardedRef, context.portalContentRef),
+      onKeyDown: handleKeyDownInPortal,
       style: {
         position: 'absolute' as const,
         width: '100%',
@@ -326,7 +425,7 @@ const TimeSlicePortal = React.forwardRef<HTMLDivElement, TimeSlicePortalProps>(
 
     const Comp = asChild ? Slot : 'div'
 
-    return <Comp {...portalProps}>{children}</Comp>
+    return <Comp {...portalPropsAria}>{children}</Comp>
   }
 )
 
@@ -348,10 +447,8 @@ const TimeSliceShortcut = React.forwardRef<
   HTMLDivElement,
   TimeSliceShortcutProps
 >(({ asChild, children, __scope, duration, ...props }, forwardedRef) => {
-  const { setIsRelative, setDateRange, setOpen } = useTimeSliceContext(
-    COMPONENT_NAME,
-    __scope
-  )
+  const { setIsRelative, setDateRange, setOpen, inputRef } =
+    useTimeSliceContext(COMPONENT_NAME, __scope)
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -363,20 +460,27 @@ const TimeSliceShortcut = React.forwardRef<
       setIsRelative(true)
       setDateRange({ startDate, endDate })
       setOpen(false)
+      if (inputRef.current) {
+        inputRef.current.blur()
+      }
     },
-    [setIsRelative, setDateRange, setOpen, duration]
+    [setIsRelative, setDateRange, setOpen, duration, inputRef]
   )
 
-  const optionProps = {
+  const optionPropsAria = {
     ...props,
+    role: 'option',
+    'aria-selected': false,
     ref: forwardedRef,
     onClick: handleClick,
+    tabIndex: -1,
+    'data-shortcut-item': 'true',
     style: { cursor: 'pointer', ...props.style }
   }
 
   const Comp = asChild ? Slot : 'div'
 
-  return <Comp {...optionProps}>{children}</Comp>
+  return <Comp {...optionPropsAria}>{children}</Comp>
 })
 
 const Root = TimeSlice

@@ -30,15 +30,24 @@ export const Basic = () => {
           style={{ border: '1px solid black', backgroundColor: 'white' }}
         >
           <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
-            <div>15 minutes</div>
+            <div className="focus:bg-gray-100">15 minutes</div>
           </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut duration={{ hours: 1 }}>
+          <TimeSlice.Shortcut
+            className="focus:bg-gray-100"
+            duration={{ hours: 1 }}
+          >
             <div>1 hour</div>
           </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut duration={{ days: 1 }}>
+          <TimeSlice.Shortcut
+            className="focus:bg-gray-100"
+            duration={{ days: 1 }}
+          >
             <div>1 day</div>
           </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut duration={{ years: 1 }}>
+          <TimeSlice.Shortcut
+            className="focus:bg-gray-100"
+            duration={{ years: 1 }}
+          >
             <div>1 year</div>
           </TimeSlice.Shortcut>
         </TimeSlice.Portal>
@@ -112,7 +121,7 @@ export const DataDog = () => {
           </div>
         </TimeSlice.Trigger>
         <TimeSlice.Portal className="w-full rounded-b-sm border-[1.5px] border-gray-300 border-t-0">
-          <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
+          <TimeSlice.Shortcut duration={{ minutes: 15 }}>
             <div>15 minutes</div>
           </TimeSlice.Shortcut>
           <TimeSlice.Shortcut duration={{ hours: 1 }}>
