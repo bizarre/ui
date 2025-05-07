@@ -276,6 +276,34 @@ describe('Date Adjustments', () => {
           newDateRange.endDate!,
           timeZone
         ).segments
+
+        // Debugging logs
+        const criticalDateForLog = newDateRange.endDate! // This is the new endDate after adjustment
+        const includeYearForLog =
+          newDateRange.startDate!.getFullYear() !==
+          newDateRange.endDate!.getFullYear()
+        const optionsForLog: Intl.DateTimeFormatOptions = {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: timeZone, // Use the test's timeZone variable
+          ...(includeYearForLog ? { year: 'numeric' } : {})
+        }
+        const formatterForLog = new Intl.DateTimeFormat('en-US', optionsForLog)
+        const rawPartsForLog = formatterForLog.formatToParts(criticalDateForLog)
+        console.log(
+          'CI/Local rawPartsForLog for criticalDate:',
+          JSON.stringify(rawPartsForLog, null, 2)
+        )
+        console.log(
+          'CI/Local newSegments:',
+          JSON.stringify(newSegments, null, 2)
+        )
+        console.log('CI/Local selStart:', selStart, 'selEnd:', selEnd)
+        // End Debugging logs
+
         for (const seg of newSegments) {
           if (
             seg.type === 'minute' &&
