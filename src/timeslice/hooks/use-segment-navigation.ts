@@ -165,24 +165,47 @@ export function useSegmentNavigation({
         return
       }
 
-      if (!dateRange.startDate || !dateRange.endDate) {
-        if (
-          !(
-            e.key === 'ArrowDown' ||
-            e.key === 'ArrowLeft' ||
-            e.key === 'ArrowRight'
-          )
-        ) {
+      const key = e.key
+
+      if (key === 'Tab' && !e.shiftKey && onFocusPortalRequested) {
+        let shouldTabToPortal = false
+        if (!dateRange.startDate || !dateRange.endDate) {
+          shouldTabToPortal = true
+        } else {
+          const canonicalText = buildSegments(
+            dateRange.startDate,
+            dateRange.endDate
+          ).text
+          if (inputEl.value !== canonicalText) {
+            shouldTabToPortal = true
+          }
+        }
+
+        if (shouldTabToPortal) {
+          e.preventDefault()
+          onFocusPortalRequested()
           return
         }
       }
 
-      const key = e.key
+      if (!dateRange.startDate || !dateRange.endDate) {
+        if (onFocusPortalRequested && key === 'ArrowDown') {
+          e.preventDefault()
+          onFocusPortalRequested()
+          return
+        }
+      }
+
       const segments = segmentsRef.current
 
       if (
         segments.length === 0 &&
-        !(key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight')
+        !(
+          key === 'ArrowDown' ||
+          key === 'ArrowLeft' ||
+          key === 'ArrowRight' ||
+          key === 'Tab'
+        )
       )
         return
 

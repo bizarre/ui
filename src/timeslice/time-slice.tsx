@@ -59,9 +59,11 @@ type TimeSliceProps = ScopedProps<{
   dateRange?: DateRange
   defaultDateRange?: DateRange
   onDateRangeChange?: (range: DateRange) => void
+  onDateRangeConfirm?: (range: DateRange) => void
   isRelative?: boolean
   defaultIsRelative?: boolean
   onIsRelativeChange?: (isRelative: boolean) => void
+  onIsRelativeConfirm?: (isRelative: boolean) => void
 }>
 
 const TimeSlice: React.FC<TimeSliceProps> = ({
@@ -167,6 +169,30 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
   const inputId = `${uniqueId}-input`
   const portalId = `${uniqueId}-portal`
 
+  // Effect to call onDateRangeConfirm/onIsRelativeConfirm when the portal closes
+  const prevOpenRef = React.useRef(open)
+  const onDateRangeConfirmProp = stateProps.onDateRangeConfirm
+  const onIsRelativeConfirmProp = stateProps.onIsRelativeConfirm
+
+  React.useEffect(() => {
+    if (prevOpenRef.current && !open) {
+      // Portal transitioned from open to closed
+      if (onDateRangeConfirmProp && dateRange.startDate && dateRange.endDate) {
+        onDateRangeConfirmProp(dateRange)
+      }
+      if (onIsRelativeConfirmProp) {
+        onIsRelativeConfirmProp(isRelative)
+      }
+    }
+    prevOpenRef.current = open
+  }, [
+    open,
+    dateRange,
+    isRelative,
+    onDateRangeConfirmProp,
+    onIsRelativeConfirmProp
+  ])
+
   return (
     <DismissableLayer onEscapeKeyDown={close} onPointerDownOutside={close}>
       <TimeSliceProvider
@@ -259,7 +285,7 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
 
     React.useEffect(() => {
       const inputEl = contextInputRef.current
-      if (inputEl && document.activeElement !== inputEl) {
+      if (inputEl && document.activeElement !== inputEl && !isOpen) {
         if (dateRange.startDate && dateRange.endDate) {
           inputEl.value = buildSegments(
             dateRange.startDate,
@@ -273,20 +299,33 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
           })
         }
       }
-    }, [contextInputRef, dateRange, formatInputValue, isRelative])
+    }, [contextInputRef, dateRange, formatInputValue, isRelative, isOpen])
 
     const handleFocus = useCallback(() => {
-      if (!isOpen) {
+      const wasOpen = isOpen
+      if (!wasOpen) {
         setOpen(true)
       }
 
       const inputEl = contextInputRef.current
-      if (inputEl && dateRange.startDate && dateRange.endDate) {
-        const { text } = buildSegments(dateRange.startDate, dateRange.endDate)
-        inputEl.value = text
+      if (inputEl) {
+        if (dateRange.startDate && dateRange.endDate) {
+          const canonicalText = buildSegments(
+            dateRange.startDate,
+            dateRange.endDate
+          ).text
+
+          if (wasOpen && inputEl.value !== canonicalText) {
+          } else {
+            inputEl.value = canonicalText
+          }
+        }
+
         queueMicrotask(() => {
           setTimeout(() => {
-            inputEl.select()
+            if (document.activeElement === inputEl) {
+              inputEl.select()
+            }
           }, 0)
         })
       }
