@@ -48,7 +48,7 @@ export default function Page() {
 
           <div className="flex flex-wrap items-center gap-4 mb-10">
             <a
-              href="https://github.com"
+              href="https://github.com/bizarre/ui"
               className="text-sm flex items-center gap-2 bg-zinc-900/80 hover:bg-zinc-800 text-white transition py-2.5 px-5 rounded-lg border border-zinc-800 backdrop-blur-sm shadow-sm hover:shadow-md hover:border-zinc-700"
               target="_blank"
               rel="noopener noreferrer"
@@ -57,7 +57,7 @@ export default function Page() {
               <span>GitHub</span>
             </a>
             <a
-              href="https://storybook-link.com"
+              href="https://ui.bizar.re/storybook"
               className="text-sm flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white transition py-2.5 px-5 rounded-lg shadow-sm hover:shadow-md hover:opacity-90"
               target="_blank"
               rel="noopener noreferrer"
@@ -431,7 +431,7 @@ export default function Page() {
 
           <div className="flex items-center gap-6">
             <a
-              href="https://github.com"
+              href="https://github.com/bizarre/ui"
               className="text-zinc-500 hover:text-white transition flex items-center gap-1.5"
               target="_blank"
               rel="noopener noreferrer"
