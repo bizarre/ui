@@ -96,6 +96,7 @@ describe('TimeSlice Component Family', () => {
         <TimeSlice
           defaultDateRange={{ startDate, endDate }}
           onDateRangeChange={handleDateRangeChange}
+          timeZone="UTC"
         >
           <Input />
         </TimeSlice>
@@ -114,6 +115,7 @@ describe('TimeSlice Component Family', () => {
 
       const { rerender } = render(
         <TimeSlice
+          timeZone="UTC"
           open={true}
           onOpenChange={mockOnOpenChange}
           dateRange={{ startDate, endDate }}
@@ -163,6 +165,47 @@ describe('TimeSlice Component Family', () => {
       expect(screen.getByRole('combobox')).toHaveValue(
         'Jan 1, 7:00\u202FAM – Jan 1, 9:00\u202FAM'
       )
+    })
+
+    it('should respect use resolved options from Intl.DateTimeFormat by default', () => {
+      const startDateInput = new Date('2024-01-01T12:00:00Z')
+      const endDateInput = new Date('2024-01-01T14:00:00Z')
+      const systemTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+      const formatDateTimeForTest = (date: Date, tz: string) => {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: tz
+        })
+        return formatter
+          .format(date)
+          .replace(/ AM$/, '\u202FAM')
+          .replace(/ PM$/, '\u202FPM')
+      }
+
+      const expectedStartString = formatDateTimeForTest(
+        startDateInput,
+        systemTimeZone
+      )
+      const expectedEndString = formatDateTimeForTest(
+        endDateInput,
+        systemTimeZone
+      )
+      const expectedDisplayValue = `${expectedStartString} – ${expectedEndString}`
+
+      render(
+        <TimeSlice
+          dateRange={{ startDate: startDateInput, endDate: endDateInput }}
+        >
+          <Input />
+        </TimeSlice>
+      )
+
+      expect(screen.getByRole('combobox')).toHaveValue(expectedDisplayValue)
     })
 
     it('should use custom formatInput function', () => {
@@ -243,6 +286,7 @@ describe('TimeSlice Component Family', () => {
     it('should render with initial value from context and open portal on focus', () => {
       render(
         <TimeSlice
+          timeZone="UTC"
           defaultDateRange={{
             startDate: initialStartDate,
             endDate: initialEndDate

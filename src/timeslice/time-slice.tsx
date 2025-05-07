@@ -66,7 +66,7 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
   children,
   __scope,
   formatInput: formatInputProp,
-  timeZone = 'UTC',
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
   onDateRangeConfirm: onDateRangeConfirmProp,
   ...stateProps
 }) => {
