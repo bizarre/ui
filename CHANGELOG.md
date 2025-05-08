@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/bizarre/ui/compare/v1.3.0...v1.4.0) (2025-05-08)
+
+
+### Features
+
+* **time-slice:** smarter default input formatter; add support for future time ranges from natural language ([a6b1b62](https://github.com/bizarre/ui/commit/a6b1b629bbf7ef2a17d04aa8c88962277ffefd4a))
+
 # [1.3.0](https://github.com/bizarre/ui/compare/v1.2.0...v1.3.0) (2025-05-08)
 
 
