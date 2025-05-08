@@ -13,12 +13,20 @@
   "exports": {
     ".": {
       "import": "./dist/bizarre-ui.es.js",
+      "types": "./dist/index.d.ts",
       "require": "./dist/bizarre-ui.cjs.js"
     },
     "./timeslice": {
       "import": "./dist/timeslice/index.es.js",
       "types": "./dist/timeslice.d.ts",
       "require": "./dist/timeslice/index.cjs.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "timeslice": [
+        "./dist/timeslice.d.ts"
+      ]
     }
   },
   "publishConfig": {
