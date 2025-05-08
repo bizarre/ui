@@ -10,4 +10,4 @@ export {
   type TimeSliceShortcutProps,
   type DateRange,
   type TimeZone
-} from './time-slice'
+} from './timeslice'

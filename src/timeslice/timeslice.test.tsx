@@ -6,7 +6,7 @@ import {
   Portal,
   Trigger,
   Shortcut
-} from './time-slice'
+} from './timeslice'
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
