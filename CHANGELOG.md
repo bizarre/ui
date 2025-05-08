@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/bizarre/ui/compare/v1.2.0...v1.3.0) (2025-05-08)
+
+
+### Features
+
+* **time-slice:** allow always absolute formatting via null formatInput prop ([a2dc3a3](https://github.com/bizarre/ui/commit/a2dc3a3a74fa551c90a7c8bb125d04dddecd3c12))
+
 # [1.2.0](https://github.com/bizarre/ui/compare/v1.1.4...v1.2.0) (2025-05-08)
 
 
