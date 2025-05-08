@@ -38,7 +38,7 @@ A smart, headless time range picker that speaks human.
 #### 🛠 Basic Usage
 
 ```tsx
-import { TimeSlice } from '@bizarre/ui/timeslice'
+import { TimeSlice } from '@bizarre/ui'
 
 function MyComponent() {
   const handleChange = (range) => {
