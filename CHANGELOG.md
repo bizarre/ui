@@ -1,3 +1,10 @@
+## [1.1.4](https://github.com/bizarre/ui/compare/v1.1.3...v1.1.4) (2025-05-08)
+
+
+### Bug Fixes
+
+* **docs:** more applicable example ([b00e8bc](https://github.com/bizarre/ui/commit/b00e8bc96a28d5e009fa43d33137afbceda91b8d))
+
 ## [1.1.3](https://github.com/bizarre/ui/compare/v1.1.2...v1.1.3) (2025-05-08)
 
 
