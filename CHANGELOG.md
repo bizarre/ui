@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/bizarre/ui/compare/v1.1.4...v1.2.0) (2025-05-08)
+
+
+### Features
+
+* **date-parser:** parse future time ranges ([8feba0f](https://github.com/bizarre/ui/commit/8feba0f616245e391a23f0fc17e32756eeffb2cd))
+
 ## [1.1.4](https://github.com/bizarre/ui/compare/v1.1.3...v1.1.4) (2025-05-08)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "@bizarre/ui",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "description": "Headless component library for the weird parts of UI.",
   "private": false,
   "main": "./dist/index/index.cjs.js",
