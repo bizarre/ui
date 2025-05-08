@@ -25,6 +25,7 @@ export function onRenderHtml(pageContext: PageContextServer) {
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>@bizarre/ui</title>
+        <meta name="description" content="A collection of headless React components nobody asked for" />
       </head>
       <body style="background-color: #000;">
         <div id="root">${dangerouslySkipEscape(pageHtml)}</div>
