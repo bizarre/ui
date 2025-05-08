@@ -17,30 +17,21 @@ export default function TimeSliceExample() {
   const getDurationLabel = (start: Date, end: Date) => {
     const ms = end.getTime() - start.getTime()
 
-    const yearDiff = end.getFullYear() - start.getFullYear()
-    const monthDiff = end.getMonth() - start.getMonth() + yearDiff * 12
+    const minute = 60 * 1000
+    const hour = 60 * minute
+    const day = 24 * hour
+    const week = 7 * day
+    const month = 30.44 * day
+    const year = 365.25 * day
 
-    const isFullMonth =
-      start.getDate() >= end.getDate() ||
-      (end.getDate() >= start.getDate() && monthDiff > 1)
+    if (ms >= year) return `${Math.floor(ms / year)}y`
+    if (ms >= month) return `${Math.floor(ms / month)}mo`
+    if (ms >= week) return `${Math.floor(ms / week)}w`
+    if (ms >= day) return `${Math.floor(ms / day)}d`
+    if (ms >= hour) return `${Math.floor(ms / hour)}h`
+    if (ms >= minute) return `${Math.floor(ms / minute)}m`
 
-    if (monthDiff >= 12) return `${Math.floor(monthDiff / 12)}y`
-    if (monthDiff > 0 && isFullMonth) return `${monthDiff}mo`
-
-    const days = Math.floor(ms / (1000 * 60 * 60 * 24))
-    const weeks = Math.floor(days / 7)
-
-    if (weeks > 0) return `${weeks}w`
-    if (days > 0) return `${days}d`
-
-    const hours = Math.floor(ms / (1000 * 60 * 60))
-    if (hours > 0) return `${hours}h`
-
-    const minutes = Math.floor(ms / (1000 * 60))
-    if (minutes > 0) return `${minutes}m`
-
-    const seconds = Math.floor(ms / 1000)
-    return `${seconds}s`
+    return `${Math.floor(ms / 1000)}s`
   }
 
   const activeDurationLabel = React.useMemo(() => {
