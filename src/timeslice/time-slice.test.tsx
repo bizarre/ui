@@ -653,7 +653,7 @@ describe('TimeSlice Component Family', () => {
       expect(mockSetOpen).toHaveBeenCalledWith(false)
       expect(inputElement).not.toHaveFocus()
 
-      expect(inputElement).toHaveValue('Past 7 days')
+      expect(inputElement).toHaveValue('Past 1 week')
     })
 
     it('should render as child, forward props, and maintain click functionality (relative format)', () => {

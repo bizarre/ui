@@ -4,7 +4,7 @@ import { composeRefs } from '@radix-ui/react-compose-refs'
 import type { Scope } from '@radix-ui/react-context'
 import { DismissableLayer } from '@radix-ui/react-dismissable-layer'
 import { Slot } from '@radix-ui/react-slot'
-import { sub, formatDistanceStrict } from 'date-fns'
+import { sub, add, Duration } from 'date-fns'
 import React, { useCallback, useMemo, useId, useState, useEffect } from 'react'
 import { useTimeSliceState, type DateRange } from './hooks/use-time-slice-state'
 import {
@@ -12,6 +12,7 @@ import {
   buildSegments
 } from './hooks/use-segment-navigation/use-segment-navigation'
 import { parseDateInput } from './utils/date-parser'
+import { formatTimeRange } from './utils/time-range'
 
 export type TimeZone = keyof typeof Timezone
 
@@ -83,14 +84,28 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
 
   const calculateIsRelative = useCallback((range: DateRange): boolean => {
     let shouldBeRelative = false
-    if (
-      range.endDate &&
-      new Date().getTime() - range.endDate.getTime() < 1000 * 60
-    ) {
-      if (range.endDate.getTime() - new Date().getTime() <= 1000 * 60) {
+    const nowMs = new Date().getTime()
+    const THRESHOLD_MS = 5000
+
+    if (range.endDate) {
+      const endDateMs = range.endDate.getTime()
+      if (
+        endDateMs > nowMs - THRESHOLD_MS &&
+        endDateMs <= nowMs + THRESHOLD_MS
+      ) {
         shouldBeRelative = true
       }
     }
+
+    if (!shouldBeRelative && range.startDate && range.endDate) {
+      const startDateMs = range.startDate.getTime()
+      const endDateMs = range.endDate.getTime()
+
+      if (Math.abs(startDateMs - nowMs) <= THRESHOLD_MS && endDateMs > nowMs) {
+        shouldBeRelative = true
+      }
+    }
+
     return shouldBeRelative
   }, [])
 
@@ -117,17 +132,13 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
       startDate?: Date
       endDate?: Date
       isRelative: boolean
-    }): string => {
-      if (!startDate || !endDate) return ''
-      if (isRelative && endDate > startDate) {
-        const human = formatDistanceStrict(startDate, endDate, {
-          roundingMethod: 'round'
-        })
-        return `Past ${human}`
-      } else {
-        return buildSegments(startDate, endDate, timeZone).text
-      }
-    },
+    }) =>
+      formatTimeRange({
+        start: startDate,
+        end: endDate,
+        relative: isRelative,
+        timeZone
+      }),
     [timeZone]
   )
 
@@ -502,11 +513,33 @@ const TimeSliceShortcut = React.forwardRef<
     (e: React.MouseEvent<HTMLDivElement>) => {
       e.preventDefault()
       const now = new Date()
-      const startDate = sub(now, duration)
-      const endDate = now
+      let finalStartDate: Date
+      let finalEndDate: Date
+
+      const isFutureIntent = Object.values(duration).some(
+        (val) => val !== undefined && val < 0
+      )
+
+      const normalizedDuration: Duration = {}
+      ;(Object.keys(duration) as Array<keyof typeof duration>).forEach(
+        (key) => {
+          const value = duration[key]
+          if (value !== undefined) {
+            normalizedDuration[key] = Math.abs(value)
+          }
+        }
+      )
+
+      if (isFutureIntent) {
+        finalStartDate = now
+        finalEndDate = add(now, normalizedDuration)
+      } else {
+        finalStartDate = sub(now, normalizedDuration)
+        finalEndDate = now
+      }
 
       setInternalIsRelative(true)
-      setDateRange({ startDate, endDate })
+      setDateRange({ startDate: finalStartDate, endDate: finalEndDate })
       setOpen(false)
       if (inputRef.current) {
         inputRef.current.blur()

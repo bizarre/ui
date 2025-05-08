@@ -106,6 +106,93 @@ export const Absolute = () => {
   )
 }
 
+export const WithFutureShortcuts = () => {
+  const [dateRange, setDateRange] = React.useState<TimeSliceProps['dateRange']>(
+    {
+      startDate: undefined,
+      endDate: undefined
+    }
+  )
+
+  return (
+    <>
+      <TimeSlice.Root onDateRangeChange={setDateRange} dateRange={dateRange}>
+        <TimeSlice.Input style={{ border: '1px solid black', width: '100%' }} />
+        <TimeSlice.Portal
+          style={{ border: '1px solid black', backgroundColor: 'white' }}
+        >
+          <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
+            <div className="focus:bg-gray-100">15 minutes</div>
+          </TimeSlice.Shortcut>
+          <TimeSlice.Shortcut
+            className="focus:bg-gray-100"
+            duration={{ hours: -1 }}
+          >
+            <div>Next hour</div>
+          </TimeSlice.Shortcut>
+        </TimeSlice.Portal>
+      </TimeSlice.Root>
+
+      <pre>{JSON.stringify(dateRange, null, 2)}</pre>
+    </>
+  )
+}
+
+export const Controlled = () => {
+  const [dateRange, setDateRange] = React.useState<TimeSliceProps['dateRange']>(
+    {
+      startDate: undefined,
+      endDate: undefined
+    }
+  )
+
+  return (
+    <>
+      <h1>Prevents future dates via controlled state</h1>
+      <TimeSlice.Root
+        onDateRangeChange={({ startDate, endDate }) => {
+          // prevent future dates
+          if (startDate && endDate && endDate > new Date()) {
+            return
+          }
+
+          setDateRange({ startDate, endDate })
+        }}
+        dateRange={dateRange}
+      >
+        <TimeSlice.Input style={{ border: '1px solid black', width: '100%' }} />
+        <TimeSlice.Portal
+          style={{ border: '1px solid black', backgroundColor: 'white' }}
+        >
+          <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
+            <div className="focus:bg-gray-100">15 minutes</div>
+          </TimeSlice.Shortcut>
+          <TimeSlice.Shortcut
+            className="focus:bg-gray-100"
+            duration={{ hours: 1 }}
+          >
+            <div>1 hour</div>
+          </TimeSlice.Shortcut>
+          <TimeSlice.Shortcut
+            className="focus:bg-gray-100"
+            duration={{ days: 1 }}
+          >
+            <div>1 day</div>
+          </TimeSlice.Shortcut>
+          <TimeSlice.Shortcut
+            className="focus:bg-gray-100"
+            duration={{ years: 1 }}
+          >
+            <div>1 year</div>
+          </TimeSlice.Shortcut>
+        </TimeSlice.Portal>
+      </TimeSlice.Root>
+
+      <pre>{JSON.stringify(dateRange, null, 2)}</pre>
+    </>
+  )
+}
+
 export const DataDog = () => {
   const [dateRange, setDateRange] = React.useState<TimeSliceProps['dateRange']>(
     {
