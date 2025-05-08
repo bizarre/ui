@@ -1,3 +1,11 @@
+## [1.1.3](https://github.com/bizarre/ui/compare/v1.1.2...v1.1.3) (2025-05-08)
+
+
+### Bug Fixes
+
+* actually publish built package (lol) ([286993b](https://github.com/bizarre/ui/commit/286993be055aaf5eeb30cc6eeeccffe66beb0aab))
+* **types:** add typesVersions field to support subpath imports ([eb41f65](https://github.com/bizarre/ui/commit/eb41f650192ef764a66eab5fbcff0b91c84e223a))
+
 ## [1.1.2](https://github.com/bizarre/ui/compare/v1.1.1...v1.1.2) (2025-05-08)
 
 
