@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/bizarre/ui/compare/v1.1.0...v1.1.1) (2025-05-08)
+
+
+### Bug Fixes
+
+* round distance instead of flooring in default input formatter ([18489b6](https://github.com/bizarre/ui/commit/18489b6d917ae0993afa21266f0d0876d1080231))
+
 # [1.1.0](https://github.com/bizarre/ui/compare/v1.0.3...v1.1.0) (2025-05-07)
 
 
