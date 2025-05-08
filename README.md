@@ -41,12 +41,12 @@ A smart, headless time range picker that speaks human.
 import { TimeSlice } from '@bizarre/ui'
 
 function MyComponent() {
-  const handleChange = (range) => {
+  const handleConfirm = (range) => {
     console.log('Selected range:', range)
   }
 
   return (
-    <TimeSlice.Root onDateRangeChange={handleChange}>
+    <TimeSlice.Root onDateRangeConfirm={handleConfirm}>
       <TimeSlice.Input />
       <TimeSlice.Portal>
         <TimeSlice.Shortcut duration={{ minutes: 15 }}>
