@@ -17,16 +17,19 @@ export default function TimeSliceExample() {
   const getDurationLabel = (start: Date, end: Date) => {
     const ms = end.getTime() - start.getTime()
 
-    const monthDiff =
-      end.getMonth() +
-      end.getFullYear() * 12 -
-      (start.getMonth() + start.getFullYear() * 12)
+    const yearDiff = end.getFullYear() - start.getFullYear()
+    const monthDiff = end.getMonth() - start.getMonth() + yearDiff * 12
+
+    const isFullMonth =
+      start.getDate() >= end.getDate() ||
+      (end.getDate() >= start.getDate() && monthDiff > 1)
 
     if (monthDiff >= 12) return `${Math.floor(monthDiff / 12)}y`
-    if (monthDiff > 0) return `${monthDiff}mo`
+    if (monthDiff > 0 && isFullMonth) return `${monthDiff}mo`
 
     const days = Math.floor(ms / (1000 * 60 * 60 * 24))
     const weeks = Math.floor(days / 7)
+
     if (weeks > 0) return `${weeks}w`
     if (days > 0) return `${days}d`
 
