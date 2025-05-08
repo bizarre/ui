@@ -1,52 +1,54 @@
-# @bizarre/ui
+# `@bizarre/ui` &nbsp;🧠👻
 
-[![npm version](https://img.shields.io/npm/v/@bizarre/ui.svg)](https://www.npmjs.com/package/@bizarre/ui)
-[![CI Tests](https://github.com/bizarre/ui/actions/workflows/ci-tests.yml/badge.svg?branch=master)](https://github.com/bizarre/ui/actions/workflows/ci-tests.yml)
+[![npm version](https://img.shields.io/npm/v/@bizarre/ui.svg)](https://www.npmjs.com/package/@bizarre/ui)  
+[![CI Tests](https://github.com/bizarre/ui/actions/workflows/ci-tests.yml/badge.svg?branch=master)](https://github.com/bizarre/ui/actions/workflows/ci-tests.yml)  
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Headless component library for the weird parts of UI.
+> **Headless UI components for the edges of the web.**  
+> Wrote these so I could ship weird stuff faster. You can too.
 
-## Installation
+---
 
-You can install `@bizarre/ui` using your favorite package manager:
+## 📦 Installation
 
-```bash
+```
 bun add @bizarre/ui
 ```
 
-## Components
+Or use `npm`, `yarn`, or `pnpm`. Whatever you like.
 
-This library aims to provide a collection of headless UI components. Currently, the following components are available:
+---
 
-### 1. TimeSlice
+## 🧩 Components
 
-A flexible and intelligent time range picker.
+### `TimeSlice`
 
-**Key Features:**
+A smart, headless time range picker that speaks human.
 
-- **Natural Language Input:** Understands phrases like "last 3 days" or "yesterday to now" using [chrono-node](https://github.com/wanasit/chrono).
-- **Relative Time Ranges:** Handles dynamic ranges like "last hour" or "past 7 days" with automatic updates.
-- **Composable API:** Customize the UI completely to match your application's design.
-- **Keyboard Accessible:** Full keyboard navigation for selecting and modifying time segments (day, month, year, hour, minute).
-- **Timezone-Aware:** Supports timezone considerations in calculations.
-- **Performance Optimized:** Designed to be efficient.
-- **Accessible by Default:** Built with accessibility in mind.
+#### 🔑 Features
 
-**Basic Usage:**
+- 🧠 **Natural language input** – understands `"last 3 days"` or `"yesterday to tomorrow"` (powered by [`chrono-node`](https://github.com/wanasit/chrono))
+- ⏳ **Relative time ranges** – like `"last hour"` or `"past 15 minutes"`
+- 🧱 **Fully composable** – render it your way
+- 🧭 **Keyboard accessible** – arrow keys, tab jumping, full control
+- 🌍 **Timezone-aware**
+- ⚡ **Performance-tuned**
+- ♿ **Accessible by default**
+
+#### 🛠 Basic Usage
 
 ```tsx
 import { TimeSlice } from '@bizarre/ui/timeslice'
 
 function MyComponent() {
-  const handleChange = (dateRange) => {
-    console.log('Selected range:', dateRange)
+  const handleChange = (range) => {
+    console.log('Selected range:', range)
   }
 
   return (
     <TimeSlice.Root onDateRangeChange={handleChange}>
       <TimeSlice.Input />
       <TimeSlice.Portal>
-        {/* Optional: Add shortcuts or other custom elements here */}
         <TimeSlice.Shortcut duration={{ minutes: 15 }}>
           15 minutes
         </TimeSlice.Shortcut>
@@ -61,30 +63,31 @@ function MyComponent() {
 }
 ```
 
-**Good For:**
+#### 🧰 Perfect For
 
-- Analytics dashboards
+- Dashboards & analytics
 - Log & event explorers
-- Data visualization tools
-- Monitoring applications
+- Data viz
+- Monitoring tools
 
 ---
 
-_(More components will be documented here as they are added.)_
+## 📘 [Storybook](https://ui.bizar.re/storybook)
 
-## Storybook
+Live demos. Keyboard magic. Check it out.
 
-Explore the components in action and see more examples in our [Storybook](https://ui.bizar.re/storybook).
+---
 
-## Contributing
+## 🤝 Contributing
 
-Contributions are welcome. If you'd like to help out:
+Help make it weirder (or better). PRs and issues welcome:
 
-- **Issues:** Found a bug or have an idea? Open an issue on GitHub. Please include details, especially steps to reproduce for bugs.
-- **Pull Requests:** For code changes, fork the repository and submit a pull request to the `master` branch. Try to stick to the existing code style and ensure tests pass.
+- Open bugs or ideas in GitHub Issues
+- Fork + PR to `master`
+- Keep it tested, readable, and accessible
 
-Thanks for considering contributing!
+---
 
-## License
+## ⚖️ License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — do wtvtf
