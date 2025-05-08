@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/bizarre/ui/compare/v1.1.1...v1.1.2) (2025-05-08)
+
+
+### Bug Fixes
+
+* **types:** correct TimeSlice type declaration path in exports field ([c8838f2](https://github.com/bizarre/ui/commit/c8838f2a1350477a5192f63f2e6c23af5857d147))
+
 ## [1.1.1](https://github.com/bizarre/ui/compare/v1.1.0...v1.1.1) (2025-05-08)
 
 
