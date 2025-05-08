@@ -51,11 +51,13 @@ type TimeSliceProps = ScopedProps<{
   defaultOpen?: boolean
   onOpenChange?: (open: boolean) => void
   setOpen?: (open: boolean) => void
-  formatInput?: (args: {
-    startDate?: Date
-    endDate?: Date
-    isRelative: boolean
-  }) => string
+  formatInput?:
+    | ((args: {
+        startDate?: Date
+        endDate?: Date
+        isRelative: boolean
+      }) => string)
+    | null
   dateRange?: DateRange
   defaultDateRange?: DateRange
   onDateRangeChange?: (range: DateRange) => void
@@ -129,10 +131,24 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
     [timeZone]
   )
 
-  const formatInputValue = useMemo(
-    () => formatInputProp || defaultFormatInput,
-    [formatInputProp, defaultFormatInput]
-  )
+  const formatInputValue = useMemo(() => {
+    if (formatInputProp) {
+      return formatInputProp
+    }
+
+    if (formatInputProp === null) {
+      return (args: {
+        startDate?: Date
+        endDate?: Date
+        isRelative: boolean
+      }) => {
+        if (!args.startDate || !args.endDate) return ''
+        return buildSegments(args.startDate, args.endDate, timeZone).text
+      }
+    }
+
+    return defaultFormatInput
+  }, [formatInputProp, defaultFormatInput])
 
   const focusPortal = useCallback(() => {
     if (portalContentRef.current) {

@@ -58,6 +58,54 @@ export const Basic = () => {
   )
 }
 
+export const Absolute = () => {
+  const [dateRange, setDateRange] = React.useState<TimeSliceProps['dateRange']>(
+    {
+      startDate: undefined,
+      endDate: undefined
+    }
+  )
+
+  const onDateRangeChange = (dateRange: TimeSliceProps['dateRange']) => {
+    setDateRange(dateRange)
+  }
+
+  return (
+    <>
+      <TimeSlice.Root onDateRangeChange={onDateRangeChange} formatInput={null}>
+        <TimeSlice.Input style={{ border: '1px solid black', width: '100%' }} />
+        <TimeSlice.Portal
+          style={{ border: '1px solid black', backgroundColor: 'white' }}
+        >
+          <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
+            <div className="focus:bg-gray-100">15 minutes</div>
+          </TimeSlice.Shortcut>
+          <TimeSlice.Shortcut
+            className="focus:bg-gray-100"
+            duration={{ hours: 1 }}
+          >
+            <div>1 hour</div>
+          </TimeSlice.Shortcut>
+          <TimeSlice.Shortcut
+            className="focus:bg-gray-100"
+            duration={{ days: 1 }}
+          >
+            <div>1 day</div>
+          </TimeSlice.Shortcut>
+          <TimeSlice.Shortcut
+            className="focus:bg-gray-100"
+            duration={{ years: 1 }}
+          >
+            <div>1 year</div>
+          </TimeSlice.Shortcut>
+        </TimeSlice.Portal>
+      </TimeSlice.Root>
+
+      <pre>{JSON.stringify(dateRange, null, 2)}</pre>
+    </>
+  )
+}
+
 export const DataDog = () => {
   const [dateRange, setDateRange] = React.useState<TimeSliceProps['dateRange']>(
     {
