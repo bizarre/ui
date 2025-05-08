@@ -39,13 +39,14 @@ jobs:
           fi
 
           # For workflow_run events
-          echo "Checking for changes in .stories.tsx files or landing directory"
+          echo "Checking for changes in .stories.tsx files, .storybook, or landing directory"
 
-          # Get the last successful commit for comparison
+          # Get the main branch
           git fetch origin master
 
-          # Find the most recent commit that changed the relevant files
-          CHANGES=$(git diff --name-only HEAD~10..HEAD | grep -E '\.stories\.tsx$|^landing/|^\.storybook/')
+          # Check changes on the branch since last divergence from master
+          # This will capture all relevant changes in the current branch
+          CHANGES=$(git diff --name-only origin/master...HEAD | grep -E '\.stories\.tsx$|^landing/|^\.storybook/')
 
           if [ ! -z "$CHANGES" ]; then
             echo "Changes detected in .stories.tsx files, .storybook directory, or landing directory"
