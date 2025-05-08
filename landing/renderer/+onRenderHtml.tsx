@@ -26,7 +26,7 @@ export function onRenderHtml(pageContext: PageContextServer) {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>@bizarre/ui</title>
       </head>
-      <body>
+      <body style="background-color: #000;">
         <div id="root">${dangerouslySkipEscape(pageHtml)}</div>
       </body>
     </html>`

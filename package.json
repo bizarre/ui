@@ -48,10 +48,11 @@
     "build-storybook": "storybook build",
     "typecheck": "tsc --emitDeclarationOnly",
     "lint": "eslint ./src --ext .ts,.tsx",
-    "prepare": "husky && bun run build",
+    "prepare": "husky",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "lint-staged": "lint-staged"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
