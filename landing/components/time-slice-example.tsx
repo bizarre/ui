@@ -2,6 +2,15 @@ import React from 'react'
 import { TimeSlice } from '@lib'
 import type { DateRange } from '@lib/timeslice'
 import { ChevronDown } from 'lucide-react'
+import {
+  differenceInYears,
+  differenceInMonths,
+  differenceInWeeks,
+  differenceInDays,
+  differenceInHours,
+  differenceInMinutes,
+  differenceInSeconds
+} from 'date-fns'
 
 export default function TimeSliceExample() {
   const [dateRange, setDateRange] = React.useState<DateRange>({
@@ -15,23 +24,22 @@ export default function TimeSliceExample() {
   }
 
   const getDurationLabel = (start: Date, end: Date) => {
-    const ms = end.getTime() - start.getTime()
+    const diffSeconds = differenceInSeconds(end, start)
+    const diffMinutes = differenceInMinutes(end, start)
+    const diffHours = differenceInHours(end, start)
+    const diffDays = differenceInDays(end, start)
+    const diffWeeks = differenceInWeeks(end, start)
+    const diffMonths = differenceInMonths(end, start)
+    const diffYears = differenceInYears(end, start)
 
-    const minute = 60 * 1000
-    const hour = 60 * minute
-    const day = 24 * hour
-    const week = 7 * day
-    const month = 30.44 * day
-    const year = 365.25 * day
+    if (diffYears > 0) return `${diffYears}y`
+    if (diffMonths > 0) return `${diffMonths}mo`
+    if (diffWeeks > 0) return `${diffWeeks}w`
+    if (diffDays > 0) return `${diffDays}d`
+    if (diffHours > 0) return `${diffHours}h`
+    if (diffMinutes > 0) return `${diffMinutes}m`
 
-    if (ms >= year) return `${Math.floor(ms / year)}y`
-    if (ms >= month) return `${Math.floor(ms / month)}mo`
-    if (ms >= week) return `${Math.floor(ms / week)}w`
-    if (ms >= day) return `${Math.floor(ms / day)}d`
-    if (ms >= hour) return `${Math.floor(ms / hour)}h`
-    if (ms >= minute) return `${Math.floor(ms / minute)}m`
-
-    return `${Math.floor(ms / 1000)}s`
+    return `${diffSeconds}s`
   }
 
   const activeDurationLabel = React.useMemo(() => {
