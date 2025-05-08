@@ -17,7 +17,7 @@
     },
     "./timeslice": {
       "import": "./dist/timeslice/index.es.js",
-      "types": "./dist/timeslice/index.d.ts",
+      "types": "./dist/timeslice.d.ts",
       "require": "./dist/timeslice/index.cjs.js"
     }
   },
