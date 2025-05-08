@@ -136,7 +136,7 @@ export default function Page() {
                     <div className="p-2 sm:p-2.5 rounded-lg bg-gradient-to-br from-violet-500/20 to-pink-500/10 border border-violet-500/20 shadow-sm">
                       <Clock className="h-5 w-5 sm:h-5 sm:w-5 text-violet-400" />
                     </div>
-                    <div className="flex flex-col items-start">
+                    <div className="flex flex-col items-start text-left flex-1">
                       <h3 className="text-lg sm:text-xl font-semibold text-white group-hover:text-white/90 transition-colors">
                         TimeSlice
                       </h3>
@@ -145,7 +145,7 @@ export default function Page() {
                       </p>
                     </div>
                   </div>
-                  <div className="h-8 w-8 rounded-full bg-zinc-900/70 border border-zinc-800 flex items-center justify-center group-data-[state=open]:rotate-180 transition-transform duration-300">
+                  <div className="h-8 w-8 aspect-square rounded-full bg-zinc-900/70 border border-zinc-800 flex items-center justify-center group-data-[state=open]:rotate-180 transition-transform duration-300">
                     <ChevronDown className="h-4 w-4 text-zinc-400 group-hover:text-zinc-300 transition-colors" />
                   </div>
                 </div>
@@ -427,7 +427,7 @@ export default function Page() {
                           </div>
 
                           {/* Feature content */}
-                          <div className="p-3 sm:p-5 min-h-[220px] sm:min-h-[260px]">
+                          <div className="p-3 sm:p-5">
                             <div className="bg-black/40 rounded-md border border-zinc-800/80 p-3 sm:p-4 mb-3 sm:mb-5">
                               <div className="flex justify-center mb-3 sm:mb-5">
                                 <div className="inline-flex items-center rounded-md border border-zinc-700 p-1.5 sm:p-2 px-2 sm:px-3 bg-black/50">
