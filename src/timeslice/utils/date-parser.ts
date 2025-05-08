@@ -14,21 +14,15 @@ export function parseDateInput(value: string): DateRange {
     const start = parsed[0].start
     const end = parsed[0].end
 
-    const startDate = start?.date()
+    let startDate = start?.date()
     let endDate = end?.date()
 
     if (startDate && !endDate) {
       if (startDate < new Date()) {
         endDate = new Date()
       } else {
-        endDate = new Date(
-          startDate.getFullYear(),
-          startDate.getMonth(),
-          startDate.getDate(),
-          23,
-          59,
-          59
-        )
+        endDate = startDate
+        startDate = new Date()
       }
     }
 
