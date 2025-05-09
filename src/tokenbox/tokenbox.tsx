@@ -16,6 +16,75 @@ export type Token<T> = {
   value: T
 }
 
+// Add new types for onCharInput
+export interface TokenHandle<T> {
+  readonly value: T // The actual token value from state at the time of event
+  readonly index: number
+  readonly text: string // Current text content in the DOM at the time of event
+  readonly cursorOffset: number // Current cursor offset within this token's text at the time of event
+  readonly isEditable: boolean
+
+  /** Updates the text content of this token. */
+  update: (newText: string, newCursorOffset?: number) => void
+
+  /**
+   * Splits this token at the current cursor position.
+   * The first part of the split will be the text before the cursor.
+   * The second part will be based on the provided `textForSecondPart`.
+   */
+  split: (options: {
+    textForSecondPart: string // Raw text for the second part, will be parsed by `actions.parse()`
+    spacerChar?: string | null // Explicit spacer to insert after the first part. Undefined = default behavior.
+  }) => void
+
+  /**
+   * Commits this token's current text and adds a new token after it.
+   */
+  commit: (options: {
+    valueForNewToken: T // Already parsed value for the new token
+    spacerChar?: string | null // Explicit spacer to insert after the committed token. Undefined = default behavior.
+  }) => void
+
+  /** Removes this token. */
+  remove: () => void
+}
+
+export type OnInputGlobalActions<T> = {
+  /** Signals that the default keydown behavior (including TokenBox's own default commit logic) should be prevented. */
+  preventDefault: () => void
+
+  /** Parses a string into a token value using the TokenBox's configured parser. */
+  parse: (text: string) => T | null
+
+  /** Inserts a new token at the specified index. */
+  insert: (
+    index: number,
+    tokenValue: T,
+    options?: {
+      spacerCharForPrevious?: string | null
+      cursorAt?: 'start' | 'end' | { offset: number }
+    }
+  ) => void
+
+  /** Removes a token at a specific index. */
+  removeAt: (index: number) => void
+
+  /** Directly sets all tokens, the cursor position, and optionally spacers. Use with caution. */
+  replaceAll: (
+    newTokens: T[],
+    newCursor: { index: number; offset: number } | null,
+    newSpacers?: (string | null)[]
+  ) => void
+}
+
+export type OnInputContext<T> = {
+  key: string // The e.key value from KeyboardEvent
+  tokens: Readonly<T[]> // All current tokens (snapshot from state)
+  token: TokenHandle<T> | null // The handle for the active token, if any
+  actions: OnInputGlobalActions<T> // Global actions
+}
+// End of new types
+
 type TokenBoxContextValue<T> = {
   onTokenChange?: (index: number, value: T) => void
   onTokenFocus?: (index: number | null) => void
@@ -43,9 +112,12 @@ type TokenBoxContextValue<T> = {
   ) => void
   onInput: (e: React.FormEvent<HTMLDivElement>) => void
   spacerChars: (string | null)[]
-  displayCommitCharSpacer: TokenBoxProps<any>['displayCommitCharSpacer']
+  displayCommitCharSpacer?:
+    | boolean
+    | ((commitChar: string, afterTokenIndex: number) => React.ReactNode)
   renderSpacer: (commitChar: string, afterTokenIndex: number) => React.ReactNode
-}
+  onCharInput?: (context: OnInputContext<T>) => void // Uses new OnCharInputContext
+} & React.HTMLAttributes<HTMLElement>
 
 const [TokenBoxProvider, useTokenBoxContext] =
   createTokenBoxContext<TokenBoxContextValue<unknown>>(COMPONENT_NAME)
@@ -54,18 +126,20 @@ type TokenBoxProps<T> = {
   children: React.ReactNode
   asChild?: boolean
   onTokenChange?: (index: number, value: T) => void
-  onTokensChange?: (tokens: T[]) => void
-  onTokenFocus?: (index: number | null) => void
-  parseToken: (value: string) => T | null
-  tokens?: T[]
-  defaultTokens?: T[]
+  onChange?: (tokens: T[]) => void
+  onFocus?: (index: number | null) => void
+  parse: (value: string) => T | null
+  value?: T[]
+  defaultValue?: T[]
   commitOnChars?: string[]
   defaultNewTokenValue?: T
   addNewTokenOnCommit?: boolean
+  insertSpacerOnCommit?: boolean // New prop
   displayCommitCharSpacer?:
     | boolean
     | ((commitChar: string, afterTokenIndex: number) => React.ReactNode)
-} & React.HTMLAttributes<HTMLElement>
+  onInput?: (context: OnInputContext<T>) => void // Added new prop
+} & Omit<React.HTMLAttributes<HTMLElement>, 'onChange' | 'onFocus' | 'onInput'>
 
 const _TokenBox = <T,>(
   {
@@ -73,15 +147,17 @@ const _TokenBox = <T,>(
     asChild,
     __scope,
     onTokenChange,
-    onTokensChange,
-    onTokenFocus,
-    tokens: tokensProp,
-    defaultTokens,
-    parseToken,
+    onChange: onTokensChange,
+    onFocus: onTokenFocus,
+    value: tokensProp,
+    defaultValue: defaultTokens,
+    parse: parseToken,
     commitOnChars,
     defaultNewTokenValue,
     addNewTokenOnCommit = true,
+    insertSpacerOnCommit = true, // Default new prop
     displayCommitCharSpacer = false,
+    onInput: onCharInput, // Added new prop
     ...props
   }: ScopedProps<TokenBoxProps<T>>,
   forwardedRef: React.Ref<HTMLElement>
@@ -1467,6 +1543,292 @@ const _TokenBox = <T,>(
   }, [tokens, restoreCursor, ref, activeTokenRef, onTokenFocus])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    let preventDefaultCalled = false
+    const setPreventDefaultFlag = () => {
+      preventDefaultCalled = true
+    }
+
+    if (onCharInput && (e.key.length === 1 || e.key === 'Enter')) {
+      // --- Determine active token info for the handle ---
+      let tokenHandleForContext: TokenHandle<T> | null = null
+      const currentActiveTokenElement = activeTokenRef.current
+
+      if (
+        currentActiveTokenElement &&
+        currentActiveTokenElement.hasAttribute('data-token-id')
+      ) {
+        const activeIndex = parseInt(
+          currentActiveTokenElement.getAttribute('data-token-id')!
+        )
+        const currentTokenValueFromState = tokens[activeIndex] // Value from state
+        const currentTextInDOM =
+          (currentActiveTokenElement.textContent === ZWS
+            ? ''
+            : currentActiveTokenElement.textContent) || ''
+        const isEditable =
+          currentActiveTokenElement.getAttribute('data-token-editable') ===
+          'true'
+
+        let cursorOffsetInToken = 0 // Default
+        const selection = window.getSelection()
+        if (
+          selection &&
+          selection.rangeCount > 0 &&
+          currentActiveTokenElement.contains(selection.anchorNode)
+        ) {
+          const range = selection.getRangeAt(0)
+          if (
+            range.startContainer.nodeType === Node.TEXT_NODE &&
+            range.startContainer.parentElement === currentActiveTokenElement
+          ) {
+            cursorOffsetInToken = range.startOffset
+            // Adjust for ZWS if it's the only content and cursor is at 1
+            if (
+              range.startContainer.textContent === ZWS &&
+              currentTextInDOM === '' && // Logical text is empty
+              cursorOffsetInToken === 1
+            ) {
+              cursorOffsetInToken = 0
+            }
+          } else if (range.startContainer === currentActiveTokenElement) {
+            // Cursor on the token span itself. Use savedRef if it's for this token.
+            if (
+              savedCursorRef.current &&
+              savedCursorRef.current.index === activeIndex
+            ) {
+              cursorOffsetInToken = savedCursorRef.current.offset
+            } else {
+              // Fallback: offset 0 is start, >0 might be end.
+              cursorOffsetInToken =
+                range.startOffset === 0 ? 0 : currentTextInDOM.length
+            }
+          }
+        } else if (
+          savedCursorRef.current &&
+          savedCursorRef.current.index === activeIndex
+        ) {
+          // Fallback to savedCursorRef if selection is not directly usable but saved ref matches
+          cursorOffsetInToken = savedCursorRef.current.offset
+        }
+        // Ensure cursor offset is within bounds
+        cursorOffsetInToken = Math.max(
+          0,
+          Math.min(cursorOffsetInToken, currentTextInDOM.length)
+        )
+
+        tokenHandleForContext = {
+          value: currentTokenValueFromState,
+          index: activeIndex,
+          text: currentTextInDOM,
+          cursorOffset: cursorOffsetInToken,
+          isEditable,
+          update: (newText, newCursorOffset) => {
+            if (!isEditable) return
+            const newTokenValue = parseToken(newText)
+            if (newTokenValue !== null) {
+              setTokens((prev) => {
+                const updated = [...prev]
+                updated[activeIndex] = newTokenValue
+                return updated
+              })
+              const finalOffset = newCursorOffset ?? newText.length
+              savedCursorRef.current = {
+                index: activeIndex,
+                offset: finalOffset
+              }
+              programmaticCursorExpectationRef.current = savedCursorRef.current
+              setPreventDefaultFlag()
+            }
+          },
+          split: (options) => {
+            if (
+              !isEditable ||
+              cursorOffsetInToken === 0 ||
+              cursorOffsetInToken === currentTextInDOM.length
+            ) {
+              console.warn(
+                '[TokenHandle.split] Cannot split at start or end of token or token not editable.'
+              )
+              return
+            }
+            const textForFirstPart = currentTextInDOM.substring(
+              0,
+              cursorOffsetInToken
+            )
+            const parsedFirstPart = parseToken(textForFirstPart)
+            const parsedSecondPart = parseToken(options.textForSecondPart) // User provides raw text, action parses it
+
+            if (parsedFirstPart !== null && parsedSecondPart !== null) {
+              const newTokens = [...tokens]
+              newTokens[activeIndex] = parsedFirstPart
+              newTokens.splice(activeIndex + 1, 0, parsedSecondPart)
+
+              const newSpacerCharsList = [...spacerChars]
+              let actualSpacerForFirstPart: string | null
+              if (options.spacerChar !== undefined) {
+                actualSpacerForFirstPart = options.spacerChar
+              } else {
+                actualSpacerForFirstPart = insertSpacerOnCommit ? e.key : null
+              }
+              newSpacerCharsList[activeIndex] = actualSpacerForFirstPart
+              newSpacerCharsList.splice(activeIndex + 1, 0, null) // Spacer for new second part is null
+
+              while (newSpacerCharsList.length < newTokens.length)
+                newSpacerCharsList.push(null)
+              if (newSpacerCharsList.length > newTokens.length)
+                newSpacerCharsList.length = newTokens.length
+
+              setTokens(newTokens)
+              setSpacerChars(newSpacerCharsList)
+              savedCursorRef.current = { index: activeIndex + 1, offset: 0 }
+              programmaticCursorExpectationRef.current = savedCursorRef.current
+              setPreventDefaultFlag()
+            } else {
+              console.warn(
+                '[TokenHandle.split] Parsing failed for one or both parts of the split.'
+              )
+            }
+          },
+          commit: (options) => {
+            if (!isEditable) return
+            const committedValue = parseToken(currentTextInDOM) // Re-parse current DOM text before committing
+            if (committedValue === null) {
+              console.warn(
+                '[TokenHandle.commit] Current token text is invalid, cannot commit.'
+              )
+              return
+            }
+
+            const newTokens = [...tokens]
+            newTokens[activeIndex] = committedValue
+            newTokens.splice(activeIndex + 1, 0, options.valueForNewToken)
+
+            const newSpacerCharsList = [...spacerChars]
+            let actualSpacerForCommittedToken: string | null
+            if (options.spacerChar !== undefined) {
+              actualSpacerForCommittedToken = options.spacerChar
+            } else {
+              actualSpacerForCommittedToken = insertSpacerOnCommit
+                ? e.key
+                : null
+            }
+            newSpacerCharsList[activeIndex] = actualSpacerForCommittedToken
+            newSpacerCharsList.splice(activeIndex + 1, 0, null) // Spacer for new token is null
+
+            while (newSpacerCharsList.length < newTokens.length)
+              newSpacerCharsList.push(null)
+            if (newSpacerCharsList.length > newTokens.length)
+              newSpacerCharsList.length = newTokens.length
+
+            setTokens(newTokens)
+            setSpacerChars(newSpacerCharsList)
+            savedCursorRef.current = { index: activeIndex + 1, offset: 0 }
+            programmaticCursorExpectationRef.current = savedCursorRef.current
+            setPreventDefaultFlag()
+          },
+          remove: () => {
+            if (!isEditable && tokens.length === 1 && activeIndex === 0) {
+              // Special case: allow removing the single non-editable token via this action
+            } else if (!isEditable) {
+              console.warn(
+                '[TokenHandle.remove] Cannot remove non-editable token unless it is the only token.'
+              )
+              return
+            }
+            removeToken(activeIndex)
+            setPreventDefaultFlag()
+          }
+        }
+      }
+      // --- End of active token info for handle ---
+
+      const globalActionsForContext: OnInputGlobalActions<T> = {
+        preventDefault: setPreventDefaultFlag,
+        parse: parseToken,
+        insert: (index, tokenValue, options) => {
+          setTokens((prev) => {
+            const newTokens = [...prev]
+            newTokens.splice(index, 0, tokenValue)
+            return newTokens
+          })
+          setSpacerChars((prevSpacers) => {
+            // prevSpacers should be in sync with tokens.length BEFORE this insertion.
+            const newSpacers = [...prevSpacers]
+
+            // If a spacer is specified for the token *before* the inserted one, set it.
+            if (index > 0 && options?.spacerCharForPrevious !== undefined) {
+              if (index - 1 < newSpacers.length) {
+                // Ensure index-1 is valid
+                newSpacers[index - 1] = options.spacerCharForPrevious
+              } else {
+                // This case implies prevSpacers might be unexpectedly short.
+                // Pad and set. This should ideally not be hit if useEffect syncs length.
+                while (newSpacers.length < index - 1) newSpacers.push(null)
+                newSpacers[index - 1] = options.spacerCharForPrevious
+              }
+            }
+
+            // Insert a 'null' spacer for the newly added token at 'index'.
+            // This increases the length of newSpacers by 1.
+            newSpacers.splice(index, 0, null)
+
+            // After the splice, newSpacers.length should be tokens.length (before this op) + 1.
+            // This is the correct length for the new number of tokens.
+            // The useEffect syncing spacerChars.length to tokens.length will handle future consistency.
+            return newSpacers
+          })
+          let cursorOffset = 0
+          if (options?.cursorAt === 'end')
+            cursorOffset = String(tokenValue ?? '').length
+          else if (typeof options?.cursorAt === 'object')
+            cursorOffset = options.cursorAt.offset
+          savedCursorRef.current = { index, offset: cursorOffset }
+          programmaticCursorExpectationRef.current = savedCursorRef.current
+          setPreventDefaultFlag()
+        },
+        removeAt: (indexToRemove) => {
+          removeToken(indexToRemove)
+          // removeToken itself doesn't call preventDefault, so if onCharInput uses this, it should also call preventDefault if needed.
+          // For now, let's assume direct usage of removeAt implies handling.
+          setPreventDefaultFlag()
+        },
+        replaceAll: (newTokens, newCursor, newSpacers) => {
+          setTokens(newTokens)
+          if (newSpacers) {
+            setSpacerChars(newSpacers)
+          } else {
+            setSpacerChars(Array(newTokens.length).fill(null))
+          }
+          savedCursorRef.current = newCursor
+          programmaticCursorExpectationRef.current = newCursor
+          setPreventDefaultFlag()
+        }
+      }
+
+      const contextForOnCharInput: OnInputContext<T> = {
+        key: e.key,
+        tokens: [...tokens], // Pass a snapshot
+        token: tokenHandleForContext,
+        actions: globalActionsForContext
+      }
+
+      onCharInput(contextForOnCharInput)
+
+      if (preventDefaultCalled) {
+        e.preventDefault()
+        if (selectAllStateRef.current !== 'none') {
+          console.log(
+            '[handleKeyDown] Resetting selectAllStateRef from',
+            selectAllStateRef.current,
+            'after onCharInput handled event.'
+          )
+          selectAllStateRef.current = 'none'
+        }
+        return // onCharInput handled it, skip default commit logic
+      }
+    }
+
+    // Default commit logic (only if onCharInput didn't preventDefault)
     if (commitOnChars && commitOnChars.includes(e.key)) {
       if (
         activeTokenRef.current &&
@@ -1612,13 +1974,14 @@ const _TokenBox = <T,>(
             if (valueForNewSlot !== null) {
               newTokens.splice(activeIndex + 1, 0, valueForNewSlot) // Insert new token
 
-              // Spacer logic for commit
-              if (displayCommitCharSpacer) {
+              // Spacer logic for commit: use new insertSpacerOnCommit prop
+              if (insertSpacerOnCommit) {
+                // <<< MODIFIED HERE
                 newSpacerCharsList[activeIndex] = e.key // Spacer for the committed token (original activeIndex)
               } else {
                 newSpacerCharsList[activeIndex] = null
               }
-              // Add spacer for the newly added token
+              // Add spacer for the newly added token (typically null)
               // Ensure spacer list is long enough if new token is at the very end
               while (newSpacerCharsList.length <= activeIndex + 1)
                 newSpacerCharsList.push(null)
@@ -2129,6 +2492,7 @@ const _TokenBox = <T,>(
       spacerChars={spacerChars}
       displayCommitCharSpacer={displayCommitCharSpacer}
       renderSpacer={renderSpacer}
+      onCharInput={onCharInput as any} // Added as any here
     >
       <Comp
         contentEditable
@@ -2273,8 +2637,12 @@ const TokenBoxToken = React.forwardRef<
 >(({ index, children, asChild, __scope, editable = false }, forwardedRef) => {
   const ref = React.useRef<HTMLDivElement>(null)
   const { activeTokenRef } = useTokenBoxContext(COMPONENT_NAME, __scope)
-  const { spacerChars, renderSpacer, displayCommitCharSpacer } =
-    useTokenBoxContext(COMPONENT_NAME, __scope) // Get spacer info from context
+  // Removed displayCommitCharSpacer from destructuring as it's not directly used here for the condition
+  const { spacerChars, renderSpacer, tokens } = useTokenBoxContext(
+    // Added tokens
+    COMPONENT_NAME,
+    __scope
+  )
 
   let displayContent: React.ReactNode = children
   const isEffectivelyEditable =
@@ -2316,7 +2684,8 @@ const TokenBoxToken = React.forwardRef<
       >
         {displayContent}
       </Comp>
-      {displayCommitCharSpacer &&
+      {/* If a spacer char is set for this token's index in state, call renderSpacer */}
+      {index < tokens.length - 1 && // Only render if not the last token
         spacerChars &&
         spacerChars[index] &&
         renderSpacer(spacerChars[index]!, index)}

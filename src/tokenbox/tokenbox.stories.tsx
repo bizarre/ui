@@ -19,28 +19,29 @@ export const Basic = () => {
   return (
     <>
       <TokenBox.Root
-        parseToken={(value) => {
+        parse={(value) => {
           return value
         }}
-        onTokensChange={(tokens) => {
+        onChange={(tokens) => {
           console.log('onTokensChange', tokens)
           setTokens(tokens)
         }}
         onTokenChange={(index, value) => {
           console.log('onTokenChange', index, value)
         }}
-        onTokenFocus={(index) => {
+        onFocus={(index) => {
           setActiveTokenIndex(index)
         }}
         style={{
           border: '1px solid black'
         }}
-        commitOnChars={['Enter', ' ']}
-        displayCommitCharSpacer={true}
-        addNewTokenOnCommit={true}
+        commitOnChars={[' ']}
+        displayCommitCharSpacer
+        addNewTokenOnCommit
+        insertSpacerOnCommit
       >
         {tokens.map((token, index) => (
-          <TokenBox.Token index={index} editable>
+          <TokenBox.Token key={index} index={index} editable>
             {token}
           </TokenBox.Token>
         ))}
