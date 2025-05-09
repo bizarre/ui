@@ -5,9 +5,9 @@ import { composeRefs } from '@radix-ui/react-compose-refs'
 import { Slot } from '@radix-ui/react-slot'
 import { ScopedProps } from '../types'
 
-const COMPONENT_NAME = 'TokenBox'
+const COMPONENT_NAME = 'Inlay'
 
-const [createTokenBoxContext] = createContextScope(COMPONENT_NAME)
+const [createInlayContext] = createContextScope(COMPONENT_NAME)
 
 const ZWS = '\u200B'
 
@@ -50,10 +50,10 @@ export interface TokenHandle<T> {
 }
 
 export type OnInputGlobalActions<T> = {
-  /** Signals that the default keydown behavior (including TokenBox's own default commit logic) should be prevented. */
+  /** Signals that the default keydown behavior (including Inlay's own default commit logic) should be prevented. */
   preventDefault: () => void
 
-  /** Parses a string into a token value using the TokenBox's configured parser. */
+  /** Parses a string into a token value using the Inlay's configured parser. */
   parse: (text: string) => T | null
 
   /** Inserts a new token at the specified index. */
@@ -85,7 +85,7 @@ export type OnInputContext<T> = {
 }
 // End of new types
 
-type TokenBoxContextValue<T> = {
+type InlayContextValue<T> = {
   onTokenChange?: (index: number, value: T) => void
   onTokenFocus?: (index: number | null) => void
   activeTokenRef: React.RefObject<HTMLElement | null>
@@ -119,10 +119,10 @@ type TokenBoxContextValue<T> = {
   onCharInput?: (context: OnInputContext<T>) => void // Uses new OnCharInputContext
 } & React.HTMLAttributes<HTMLElement>
 
-const [TokenBoxProvider, useTokenBoxContext] =
-  createTokenBoxContext<TokenBoxContextValue<unknown>>(COMPONENT_NAME)
+const [InlayProvider, useInlayContext] =
+  createInlayContext<InlayContextValue<unknown>>(COMPONENT_NAME)
 
-type TokenBoxProps<T> = {
+type InlayProps<T> = {
   children: React.ReactNode
   asChild?: boolean
   onTokenChange?: (index: number, value: T) => void
@@ -141,7 +141,7 @@ type TokenBoxProps<T> = {
   onInput?: (context: OnInputContext<T>) => void // Added new prop
 } & Omit<React.HTMLAttributes<HTMLElement>, 'onChange' | 'onFocus' | 'onInput'>
 
-const _TokenBox = <T,>(
+const _Inlay = <T,>(
   {
     children,
     asChild,
@@ -159,7 +159,7 @@ const _TokenBox = <T,>(
     displayCommitCharSpacer = false,
     onInput: onCharInput, // Added new prop
     ...props
-  }: ScopedProps<TokenBoxProps<T>>,
+  }: ScopedProps<InlayProps<T>>,
   forwardedRef: React.Ref<HTMLElement>
 ) => {
   const ref = React.useRef<HTMLDivElement>(null)
@@ -175,7 +175,7 @@ const _TokenBox = <T,>(
 
   console.log('activeTokenRef', activeTokenRef.current)
   console.log(
-    '[_TokenBox] Rendering with spacerChars:',
+    '[_Inlay] Rendering with spacerChars:',
     spacerChars,
     'tokens:',
     tokensProp?.length
@@ -188,7 +188,7 @@ const _TokenBox = <T,>(
   })
 
   console.log(
-    '[_TokenBox] Rendering. spacerChars:',
+    '[_Inlay] Rendering. spacerChars:',
     spacerChars,
     'internal tokens length:',
     tokens.length
@@ -236,7 +236,7 @@ const _TokenBox = <T,>(
       const sel = window.getSelection()
       const expectation = programmaticCursorExpectationRef.current
 
-      // Check if focus is still within the TokenBox at all.
+      // Check if focus is still within the Inlay at all.
       // If not, clear all internal state related to active token/cursor and bail.
       if (
         !ref.current ||
@@ -245,7 +245,7 @@ const _TokenBox = <T,>(
           document.activeElement !== ref.current)
       ) {
         console.log(
-          '[selectionchange] Focus is OUTSIDE TokenBox or TokenBox unmounted. Clearing state.'
+          '[selectionchange] Focus is OUTSIDE Inlay or Inlay unmounted. Clearing state.'
         )
         if (activeTokenRef.current) {
           activeTokenRef.current = null
@@ -306,7 +306,7 @@ const _TokenBox = <T,>(
             ) as HTMLElement | null)
           : (container as HTMLElement)
 
-      // If selection moves outside the TokenBox editor completely
+      // If selection moves outside the Inlay editor completely
       if (tokenEl && ref.current && !ref.current.contains(tokenEl)) {
         if (activeTokenRef.current !== null) {
           activeTokenRef.current = null
@@ -516,7 +516,7 @@ const _TokenBox = <T,>(
             selectAllStateRef.current = 'none'
           }
         }
-        // If focus is still within the main TokenBox div but not on a token
+        // If focus is still within the main Inlay div but not on a token
         if (
           ref.current &&
           document.activeElement &&
@@ -609,7 +609,7 @@ const _TokenBox = <T,>(
           range.selectNodeContents(element)
           range.collapse(true)
           console.warn(
-            'TokenBox: restoreCursor trying to set offset in a non-text node or empty token without a text node. Collapsing to start of token.'
+            'Inlay: restoreCursor trying to set offset in a non-text node or empty token without a text node. Collapsing to start of token.'
           )
         } else {
           const textNode = firstChild
@@ -2478,7 +2478,7 @@ const _TokenBox = <T,>(
   const Comp = asChild ? Slot : 'div'
 
   return (
-    <TokenBoxProvider
+    <InlayProvider
       scope={__scope}
       onTokenChange={onTokenChange as any}
       activeTokenRef={activeTokenRef}
@@ -2620,25 +2620,25 @@ const _TokenBox = <T,>(
       >
         {children}
       </Comp>
-    </TokenBoxProvider>
+    </InlayProvider>
   )
 }
 
-type TokenBoxTokenProps = {
+type InlayTokenProps = {
   index: number
   children: React.ReactNode
   asChild?: boolean
   editable?: boolean
 }
 
-const TokenBoxToken = React.forwardRef<
+const InlayToken = React.forwardRef<
   HTMLDivElement,
-  ScopedProps<TokenBoxTokenProps>
+  ScopedProps<InlayTokenProps>
 >(({ index, children, asChild, __scope, editable = false }, forwardedRef) => {
   const ref = React.useRef<HTMLDivElement>(null)
-  const { activeTokenRef } = useTokenBoxContext(COMPONENT_NAME, __scope)
+  const { activeTokenRef } = useInlayContext(COMPONENT_NAME, __scope)
   // Removed displayCommitCharSpacer from destructuring as it's not directly used here for the condition
-  const { spacerChars, renderSpacer, tokens } = useTokenBoxContext(
+  const { spacerChars, renderSpacer, tokens } = useInlayContext(
     // Added tokens
     COMPONENT_NAME,
     __scope
@@ -2669,7 +2669,7 @@ const TokenBoxToken = React.forwardRef<
         onBeforeInput={(e) => {
           const event = e.nativeEvent as InputEvent
           console.log(
-            '[TokenBoxToken onBeforeInput] SPAN Index:',
+            '[InlayToken onBeforeInput] SPAN Index:',
             index,
             'inputType:',
             event.inputType,
@@ -2693,16 +2693,16 @@ const TokenBoxToken = React.forwardRef<
   )
 })
 
-TokenBoxToken.displayName = 'TokenBoxToken'
+InlayToken.displayName = 'InlayToken'
 
-export function createTokenBox<T>() {
-  const Root = React.forwardRef(_TokenBox<T>)
+export function createInlay<T>() {
+  const Root = React.forwardRef(_Inlay<T>)
   return {
     Root,
-    Token: TokenBoxToken as React.ForwardRefExoticComponent<
-      TokenBoxTokenProps & { children: T } & React.RefAttributes<HTMLDivElement>
+    Token: InlayToken as React.ForwardRefExoticComponent<
+      InlayTokenProps & { children: T } & React.RefAttributes<HTMLDivElement>
     >
   } as const
 }
 
-export const { Root, Token } = createTokenBox<string>()
+export const { Root, Token } = createInlay<string>()

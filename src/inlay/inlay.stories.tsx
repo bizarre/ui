@@ -1,30 +1,30 @@
 import type { Meta } from '@storybook/react'
 
-import { createTokenBox } from './tokenbox'
+import { createInlay } from './inlay'
 import * as React from 'react'
 
-const TokenBox = createTokenBox<string>()
+const Inlay = createInlay<string>()
 
-const meta: Meta<typeof TokenBox.Root> = {
-  component: TokenBox.Root
+const meta: Meta<typeof Inlay.Root> = {
+  component: Inlay.Root
 }
 
 export default meta
 
 export const Basic = () => {
-  const [tokens, setTokens] = React.useState<string[]>([])
+  const [value, setValue] = React.useState<string[]>([])
   const [activeTokenIndex, setActiveTokenIndex] = React.useState<number | null>(
     null
   )
   return (
     <>
-      <TokenBox.Root
+      <Inlay.Root
         parse={(value) => {
           return value
         }}
-        onChange={(tokens) => {
-          console.log('onTokensChange', tokens)
-          setTokens(tokens)
+        onChange={(value) => {
+          console.log('onChange', value)
+          setValue(value)
         }}
         onTokenChange={(index, value) => {
           console.log('onTokenChange', index, value)
@@ -40,19 +40,19 @@ export const Basic = () => {
         addNewTokenOnCommit
         insertSpacerOnCommit
       >
-        {tokens.map((token, index) => (
-          <TokenBox.Token key={index} index={index} editable>
+        {value.map((token, index) => (
+          <Inlay.Token key={index} index={index} editable>
             {token}
-          </TokenBox.Token>
+          </Inlay.Token>
         ))}
-      </TokenBox.Root>
+      </Inlay.Root>
 
       <pre>
         {JSON.stringify(
           {
-            tokens,
+            value,
             activeToken:
-              activeTokenIndex !== null ? tokens[activeTokenIndex] : undefined
+              activeTokenIndex !== null ? value[activeTokenIndex] : undefined
           },
           null,
           2
