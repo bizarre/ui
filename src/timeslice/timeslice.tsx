@@ -1,7 +1,6 @@
 import Timezone from 'timezone-enum'
 import { createContextScope } from '@radix-ui/react-context'
 import { composeRefs } from '@radix-ui/react-compose-refs'
-import type { Scope } from '@radix-ui/react-context'
 import { DismissableLayer } from '@radix-ui/react-dismissable-layer'
 import { Slot } from '@radix-ui/react-slot'
 import { sub, add, Duration } from 'date-fns'
@@ -13,12 +12,12 @@ import {
 } from './hooks/use-segment-navigation/use-segment-navigation'
 import { parseDateInput } from './utils/date-parser'
 import { formatTimeRange } from './utils/time-range'
+import { ScopedProps } from '../types'
 
 export type TimeZone = keyof typeof Timezone
 
 const COMPONENT_NAME = 'TimeSlice'
 
-type ScopedProps<P> = P & { __scope?: Scope }
 const [createTimeSliceContext] = createContextScope(COMPONENT_NAME)
 
 type TimeSliceContextValue = {
