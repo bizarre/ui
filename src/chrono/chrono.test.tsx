@@ -1,25 +1,19 @@
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
-import {
-  Root as TimeSlice,
-  Input,
-  Portal,
-  Trigger,
-  Shortcut
-} from './timeslice'
+import { Root as Chrono, Input, Portal, Trigger, Shortcut } from './chrono'
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
-describe('TimeSlice Component Family', () => {
-  describe('TimeSlice (Root)', () => {
+describe('Chrono Component Family', () => {
+  describe('Chrono (Root)', () => {
     it('should render without crashing with minimal props', () => {
       render(
-        <TimeSlice>
+        <Chrono>
           <Input />
           <Portal>
             <div>Portal Content</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
 
       expect(screen.getByRole('combobox')).toBeInTheDocument()
@@ -27,12 +21,12 @@ describe('TimeSlice Component Family', () => {
 
     it('should be closed by default', () => {
       render(
-        <TimeSlice>
+        <Chrono>
           <Input />
           <Portal data-testid="portal-closed-default">
             <div>Portal Content</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       expect(screen.getByTestId('portal-closed-default')).toHaveStyle({
         display: 'none'
@@ -41,12 +35,12 @@ describe('TimeSlice Component Family', () => {
 
     it('should respect defaultOpen prop', () => {
       render(
-        <TimeSlice defaultOpen>
+        <Chrono defaultOpen>
           <Input />
           <Portal>
             <div>Portal Content</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       expect(screen.getByText('Portal Content')).toBeVisible()
     })
@@ -55,7 +49,7 @@ describe('TimeSlice Component Family', () => {
       const handleOpenChange = vi.fn()
       const mockOnDateRangeChange = vi.fn()
       const { rerender } = render(
-        <TimeSlice
+        <Chrono
           open={false}
           onOpenChange={handleOpenChange}
           onDateRangeChange={mockOnDateRangeChange}
@@ -64,14 +58,14 @@ describe('TimeSlice Component Family', () => {
           <Portal data-testid="portal-controlled-open">
             <div>Portal Content</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       expect(screen.getByTestId('portal-controlled-open')).toHaveStyle({
         display: 'none'
       })
 
       rerender(
-        <TimeSlice
+        <Chrono
           open={true}
           onOpenChange={handleOpenChange}
           onDateRangeChange={mockOnDateRangeChange}
@@ -80,7 +74,7 @@ describe('TimeSlice Component Family', () => {
           <Portal data-testid="portal-controlled-open">
             <div>Portal Content</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       expect(screen.getByTestId('portal-controlled-open')).not.toHaveStyle({
         display: 'none'
@@ -93,13 +87,13 @@ describe('TimeSlice Component Family', () => {
       const endDate = new Date('2024-01-01T01:00:00Z')
       const handleDateRangeChange = vi.fn()
       render(
-        <TimeSlice
+        <Chrono
           defaultDateRange={{ startDate, endDate }}
           onDateRangeChange={handleDateRangeChange}
           timeZone="UTC"
         >
           <Input />
-        </TimeSlice>
+        </Chrono>
       )
 
       expect(screen.getByRole('combobox')).toHaveValue(
@@ -114,7 +108,7 @@ describe('TimeSlice Component Family', () => {
       const mockOnOpenChange = vi.fn()
 
       const { rerender } = render(
-        <TimeSlice
+        <Chrono
           timeZone="UTC"
           open={true}
           onOpenChange={mockOnOpenChange}
@@ -125,14 +119,14 @@ describe('TimeSlice Component Family', () => {
           <Portal>
             <div>Portal</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       expect(screen.getByRole('combobox')).toHaveValue(
         'Feb 10, 10:00\u202FAM – Feb 10, 12:00\u202FPM'
       )
 
       rerender(
-        <TimeSlice
+        <Chrono
           open={false}
           onOpenChange={mockOnOpenChange}
           dateRange={{ startDate, endDate }}
@@ -142,7 +136,7 @@ describe('TimeSlice Component Family', () => {
           <Portal>
             <div>Portal</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       expect(handleDateRangeConfirm).toHaveBeenCalledWith({
         startDate,
@@ -154,12 +148,12 @@ describe('TimeSlice Component Family', () => {
       const startDateNY = new Date('2024-01-01T12:00:00Z')
       const endDateNY = new Date('2024-01-01T14:00:00Z')
       render(
-        <TimeSlice
+        <Chrono
           dateRange={{ startDate: startDateNY, endDate: endDateNY }}
           timeZone="America/New_York"
         >
           <Input />
-        </TimeSlice>
+        </Chrono>
       )
 
       expect(screen.getByRole('combobox')).toHaveValue(
@@ -198,11 +192,11 @@ describe('TimeSlice Component Family', () => {
       const expectedDisplayValue = `${expectedStartString} – ${expectedEndString}`
 
       render(
-        <TimeSlice
+        <Chrono
           dateRange={{ startDate: startDateInput, endDate: endDateInput }}
         >
           <Input />
-        </TimeSlice>
+        </Chrono>
       )
 
       expect(screen.getByRole('combobox')).toHaveValue(expectedDisplayValue)
@@ -217,12 +211,9 @@ describe('TimeSlice Component Family', () => {
         return 'Custom Empty'
       })
       render(
-        <TimeSlice
-          dateRange={{ startDate, endDate }}
-          formatInput={customFormat}
-        >
+        <Chrono dateRange={{ startDate, endDate }} formatInput={customFormat}>
           <Input />
-        </TimeSlice>
+        </Chrono>
       )
 
       expect(customFormat).toHaveBeenCalledWith({
@@ -235,15 +226,15 @@ describe('TimeSlice Component Family', () => {
     })
   })
 
-  describe('TimeSliceTrigger', () => {
+  describe('ChronoTrigger', () => {
     it('should render a div by default and focus input on click', () => {
       render(
-        <TimeSlice>
+        <Chrono>
           <Trigger>
             <span>Click Me</span>
           </Trigger>
           <Input data-testid="input-for-trigger1" />
-        </TimeSlice>
+        </Chrono>
       )
 
       const triggerElement = screen.getByText('Click Me').parentElement
@@ -257,12 +248,12 @@ describe('TimeSlice Component Family', () => {
 
     it('should render as child and forward props when asChild is true', () => {
       render(
-        <TimeSlice>
+        <Chrono>
           <Trigger asChild data-testid="custom-trigger">
             <button>Custom Button</button>
           </Trigger>
           <Input data-testid="input-for-trigger2" />
-        </TimeSlice>
+        </Chrono>
       )
 
       const triggerButton = screen.getByRole('button', {
@@ -278,14 +269,14 @@ describe('TimeSlice Component Family', () => {
     })
   })
 
-  describe('TimeSliceInput', () => {
+  describe('ChronoInput', () => {
     const initialStartDate = new Date('2024-07-04T10:00:00Z')
     const initialEndDate = new Date('2024-07-04T12:00:00Z')
     const initialFormattedValue = 'Jul 4, 10:00\u202FAM – Jul 4, 12:00\u202FPM'
 
     it('should render with initial value from context and open portal on focus', () => {
       render(
-        <TimeSlice
+        <Chrono
           timeZone="UTC"
           defaultDateRange={{
             startDate: initialStartDate,
@@ -296,7 +287,7 @@ describe('TimeSlice Component Family', () => {
           <Portal>
             <div>Portal Content For Input</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       const inputEl = screen.getByTestId('input-control')
       expect(inputEl).toHaveValue(initialFormattedValue)
@@ -310,9 +301,9 @@ describe('TimeSlice Component Family', () => {
     it('should update dateRange on valid input change', () => {
       const handleDateRangeChange = vi.fn()
       render(
-        <TimeSlice onDateRangeChange={handleDateRangeChange}>
+        <Chrono onDateRangeChange={handleDateRangeChange}>
           <Input data-testid="input-change" />
-        </TimeSlice>
+        </Chrono>
       )
       const inputEl = screen.getByTestId('input-change')
       fireEvent.change(inputEl, {
@@ -328,7 +319,7 @@ describe('TimeSlice Component Family', () => {
     it('should clear dateRange on empty input change', () => {
       const handleDateRangeChange = vi.fn()
       render(
-        <TimeSlice
+        <Chrono
           defaultDateRange={{
             startDate: initialStartDate,
             endDate: initialEndDate
@@ -336,7 +327,7 @@ describe('TimeSlice Component Family', () => {
           onDateRangeChange={handleDateRangeChange}
         >
           <Input data-testid="input-clear" />
-        </TimeSlice>
+        </Chrono>
       )
       const inputEl = screen.getByTestId('input-clear')
       fireEvent.change(inputEl, { target: { value: '' } })
@@ -348,14 +339,14 @@ describe('TimeSlice Component Family', () => {
 
     it('should call useSegmentNavigation handleKeyDown on key press', () => {
       render(
-        <TimeSlice
+        <Chrono
           defaultDateRange={{
             startDate: initialStartDate,
             endDate: initialEndDate
           }}
         >
           <Input data-testid="input-keydown" />
-        </TimeSlice>
+        </Chrono>
       )
       const inputEl = screen.getByTestId('input-keydown')
       fireEvent.focus(inputEl)
@@ -365,11 +356,11 @@ describe('TimeSlice Component Family', () => {
     it('should render as child and forward props, maintaining functionality', () => {
       const handleDateRangeChange = vi.fn()
       render(
-        <TimeSlice onDateRangeChange={handleDateRangeChange}>
+        <Chrono onDateRangeChange={handleDateRangeChange}>
           <Input asChild data-testid="custom-input-aschild">
             <textarea />
           </Input>
-        </TimeSlice>
+        </Chrono>
       )
       const textareaEl = screen.getByTestId('custom-input-aschild')
       expect(textareaEl.tagName).toBe('TEXTAREA')
@@ -387,15 +378,15 @@ describe('TimeSlice Component Family', () => {
     })
   })
 
-  describe('TimeSlicePortal', () => {
+  describe('ChronoPortal', () => {
     it('should not render if open is false', () => {
       render(
-        <TimeSlice open={false}>
+        <Chrono open={false}>
           <Input />
           <Portal data-testid="portal-visibility-test">
             <div>Portal Content Here</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       expect(screen.getByTestId('portal-visibility-test')).toHaveStyle({
         display: 'none'
@@ -404,21 +395,21 @@ describe('TimeSlice Component Family', () => {
 
     it('should render if open is true', () => {
       render(
-        <TimeSlice defaultOpen>
+        <Chrono defaultOpen>
           {' '}
           {/* Or open={true} */}
           <Input />
           <Portal>
             <div>Portal Visible</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       expect(screen.getByText('Portal Visible')).toBeVisible()
     })
 
     it('Escape key should close portal and focus input', () => {
       render(
-        <TimeSlice defaultOpen>
+        <Chrono defaultOpen>
           <Input data-testid="portal-input-escape" />
           <Portal ariaLabel="Escape Test Portal">
             {/* Ensure there's a genuinely focusable child for the event target */}
@@ -430,7 +421,7 @@ describe('TimeSlice Component Family', () => {
             </button>
             <div tabIndex={-1}>Some other content</div>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       const focusableChild = screen.getByTestId('focusable-child-in-portal')
       const inputEl = screen.getByTestId('portal-input-escape')
@@ -448,7 +439,7 @@ describe('TimeSlice Component Family', () => {
       const setupPortalWithItems = () => {
         const onItemClick = vi.fn()
         render(
-          <TimeSlice defaultOpen>
+          <Chrono defaultOpen>
             <Input data-testid="portal-input-nav" />
             <Portal ariaLabel="Test Portal Navigation">
               <button
@@ -473,7 +464,7 @@ describe('TimeSlice Component Family', () => {
                 Item 3
               </button>
             </Portal>
-          </TimeSlice>
+          </Chrono>
         )
         return {
           item1: screen.getByTestId('item1'),
@@ -550,12 +541,12 @@ describe('TimeSlice Component Family', () => {
 
     it('should render as child and forward props, maintaining functionality', () => {
       render(
-        <TimeSlice defaultOpen>
+        <Chrono defaultOpen>
           <Input />
           <Portal asChild data-testid="custom-portal-aschild">
             <section>Custom Portal Section</section>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       const portalSection = screen.getByTestId('custom-portal-aschild')
       expect(portalSection.tagName).toBe('SECTION')
@@ -563,7 +554,7 @@ describe('TimeSlice Component Family', () => {
     })
   })
 
-  describe('TimeSliceShortcut', () => {
+  describe('ChronoShortcut', () => {
     const mockSetDateRange = vi.fn()
     const mockSetIsRelative = vi.fn()
     const mockSetOpen = vi.fn()
@@ -598,7 +589,7 @@ describe('TimeSlice Component Family', () => {
       mockInputRef.current.blur = mockInputBlur
 
       render(
-        <TimeSlice
+        <Chrono
           defaultOpen
           onDateRangeChange={mockSetDateRange}
           onOpenChange={mockSetOpen}
@@ -608,7 +599,7 @@ describe('TimeSlice Component Family', () => {
           <Portal>
             <Shortcut {...shortcutProps} />
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       const inputElement = screen.getByTestId(inputTestId)
       inputElement.focus()
@@ -662,7 +653,7 @@ describe('TimeSlice Component Family', () => {
       const mockSetDateRange = vi.fn()
       const mockSetOpen = vi.fn()
       render(
-        <TimeSlice
+        <Chrono
           defaultOpen
           onDateRangeChange={mockSetDateRange}
           onOpenChange={mockSetOpen}
@@ -675,7 +666,7 @@ describe('TimeSlice Component Family', () => {
               <button data-testid="custom-shortcut">Past Hour Custom</button>
             </Shortcut>
           </Portal>
-        </TimeSlice>
+        </Chrono>
       )
       const textareaElement = screen.getByTestId(inputId)
       textareaElement.focus()

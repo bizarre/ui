@@ -6,7 +6,7 @@ export type DateRange = {
   endDate?: Date
 }
 
-type UseTimeSliceStateProps = {
+type UseChronoStateProps = {
   open?: boolean
   defaultOpen?: boolean
   onOpenChange?: (open: boolean) => void
@@ -15,10 +15,10 @@ type UseTimeSliceStateProps = {
   onDateRangeChange?: (range: DateRange) => void
 }
 
-export function useTimeSliceState({
+export function useChronoState({
   onDateRangeChange,
   ...props
-}: UseTimeSliceStateProps) {
+}: UseChronoStateProps) {
   const [open, setOpen] = useControllableState({
     prop: props.open,
     defaultProp: props.defaultOpen ?? false,
