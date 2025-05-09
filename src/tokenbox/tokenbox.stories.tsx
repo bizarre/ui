@@ -1,7 +1,9 @@
 import type { Meta } from '@storybook/react'
 
-import * as TokenBox from './tokenbox'
+import { createTokenBox } from './tokenbox'
 import * as React from 'react'
+
+const TokenBox = createTokenBox<string>()
 
 const meta: Meta<typeof TokenBox.Root> = {
   component: TokenBox.Root
@@ -10,46 +12,44 @@ const meta: Meta<typeof TokenBox.Root> = {
 export default meta
 
 export const Basic = () => {
-  const [tokens, setTokens] = React.useState<{ [id: string]: string }>({})
-  const [activeTokenId, setActiveTokenId] = React.useState<string | null>(null)
-  const [value, setValue] = React.useState('')
+  const [tokens, setTokens] = React.useState<string[]>([])
+  const [activeTokenIndex, setActiveTokenIndex] = React.useState<number | null>(
+    null
+  )
   return (
     <>
       <TokenBox.Root
+        parseToken={(value) => {
+          return value
+        }}
         onTokensChange={(tokens) => {
           console.log('onTokensChange', tokens)
           setTokens(tokens)
         }}
-        onTokenChange={(id, value) => {
-          console.log('onTokenChange', id, value)
+        onTokenChange={(index, value) => {
+          console.log('onTokenChange', index, value)
         }}
-        onTokenFocus={(id) => {
-          setActiveTokenId(id)
+        onTokenFocus={(index) => {
+          setActiveTokenIndex(index)
         }}
         style={{
           border: '1px solid black'
         }}
+        commitOnChars={['Enter', ' ']}
       >
-        {Object.entries(tokens).map(([id, token]) => (
-          <TokenBox.Token key={id} id={id} editable>
+        {tokens.map((token, index) => (
+          <TokenBox.Token key={index} index={index} editable>
             {token}
           </TokenBox.Token>
         ))}
-        <TokenBox.Buffer
-          value={value}
-          onChange={(value) => {
-            setValue(value)
-            console.log('onChange', value)
-          }}
-        />
       </TokenBox.Root>
 
       <pre>
         {JSON.stringify(
           {
-            value,
             tokens,
-            activeToken: activeTokenId ? tokens[activeTokenId] : undefined
+            activeToken:
+              activeTokenIndex !== null ? tokens[activeTokenIndex] : undefined
           },
           null,
           2
