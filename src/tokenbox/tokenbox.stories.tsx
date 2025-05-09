@@ -36,9 +36,11 @@ export const Basic = () => {
           border: '1px solid black'
         }}
         commitOnChars={['Enter', ' ']}
+        displayCommitCharSpacer={true}
+        addNewTokenOnCommit={true}
       >
         {tokens.map((token, index) => (
-          <TokenBox.Token key={index} index={index} editable>
+          <TokenBox.Token index={index} editable>
             {token}
           </TokenBox.Token>
         ))}

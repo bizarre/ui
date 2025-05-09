@@ -42,6 +42,9 @@ type TokenBoxContextValue<T> = {
     cursorToRestore?: { index: number; offset: number } | null
   ) => void
   onInput: (e: React.FormEvent<HTMLDivElement>) => void
+  spacerChars: (string | null)[]
+  displayCommitCharSpacer: TokenBoxProps<any>['displayCommitCharSpacer']
+  renderSpacer: (commitChar: string, afterTokenIndex: number) => React.ReactNode
 }
 
 const [TokenBoxProvider, useTokenBoxContext] =
@@ -59,6 +62,9 @@ type TokenBoxProps<T> = {
   commitOnChars?: string[]
   defaultNewTokenValue?: T
   addNewTokenOnCommit?: boolean
+  displayCommitCharSpacer?:
+    | boolean
+    | ((commitChar: string, afterTokenIndex: number) => React.ReactNode)
 } & React.HTMLAttributes<HTMLElement>
 
 const _TokenBox = <T,>(
@@ -75,6 +81,7 @@ const _TokenBox = <T,>(
     commitOnChars,
     defaultNewTokenValue,
     addNewTokenOnCommit = true,
+    displayCommitCharSpacer = false,
     ...props
   }: ScopedProps<TokenBoxProps<T>>,
   forwardedRef: React.Ref<HTMLElement>
@@ -88,14 +95,60 @@ const _TokenBox = <T,>(
     index: number
     offset: number
   } | null>(null)
+  const [spacerChars, setSpacerChars] = React.useState<(string | null)[]>([])
 
   console.log('activeTokenRef', activeTokenRef.current)
+  console.log(
+    '[_TokenBox] Rendering with spacerChars:',
+    spacerChars,
+    'tokens:',
+    tokensProp?.length
+  )
 
   const [tokens, setTokens] = useControllableState({
     prop: tokensProp,
     defaultProp: defaultTokens ?? [],
     onChange: onTokensChange
   })
+
+  console.log(
+    '[_TokenBox] Rendering. spacerChars:',
+    spacerChars,
+    'internal tokens length:',
+    tokens.length
+  )
+
+  // Define renderSpacer function based on the prop
+  const renderSpacer = React.useCallback(
+    (commitChar: string, afterTokenIndex: number): React.ReactNode => {
+      if (typeof displayCommitCharSpacer === 'function') {
+        return displayCommitCharSpacer(commitChar, afterTokenIndex)
+      }
+      if (displayCommitCharSpacer === true) {
+        return (
+          <span
+            contentEditable="false"
+            suppressContentEditableWarning
+            style={{ whiteSpace: 'pre' }}
+          >
+            {commitChar}
+          </span>
+        )
+      }
+      return null // If displayCommitCharSpacer is false or undefined
+    },
+    [displayCommitCharSpacer]
+  )
+
+  // Effect to keep spacerCharsListRef in sync with tokens length
+  React.useEffect(() => {
+    // Only resize/initialize if the lengths are out of sync.
+    // This prevents overwriting intentionally set spacers when tokens.length changes
+    // but spacerChars was already updated by an operation like handleKeyDown.
+    if (spacerChars.length !== tokens.length) {
+      setSpacerChars(Array(tokens.length).fill(null))
+    }
+  }, [tokens.length, spacerChars.length]) // Re-run if the number of tokens changes OR spacerChars length changes
 
   const savedCursorRef = React.useRef<{
     index: number
@@ -282,20 +335,33 @@ const _TokenBox = <T,>(
             return // Stop processing this selectionchange event further for this path
           }
         } else {
-          // No expectation for THIS token (either null, or for a different token)
+          // No expectation for THIS token (either null, or for a different token ID)
           if (expectation) {
-            // Implies expectation was for a *different* token
+            // Implies expectation was for a *different* token ID
             console.log(
-              '[selectionchange] Expectation existed for token',
+              '[selectionchange] Expectation existed for token ID',
               expectation.index,
-              'but current selection is on token',
+              '(offset:',
+              expectation.offset,
+              ')',
+              'but current selection is on token ID',
               newActiveIndex,
-              '. Clearing old expectation.'
+              '(DOM offset:',
+              finalOffset,
+              '). Ignoring this selectionchange event and letting useLayoutEffect attempt to fulfill the original expectation.'
             )
-            programmaticCursorExpectationRef.current = null // Clear outdated expectation
+            // DO NOT clear programmaticCursorExpectationRef.current.
+            // DO NOT update savedCursorRef.current.
+            return // Let useLayoutEffect try to handle the pending expectation.
           }
 
           // Logic for when there's no relevant pending expectation for the current selection's token
+          // (This part is reached if expectation was null, or if it was for a different token AND we didn't return above)
+          // ^ The above comment is now slightly inaccurate due to the return, but the core idea is:
+          // If we are here, it means either:
+          //    1. `expectation` was null initially.
+          //    2. `expectation` was for a different token, and the new logic decided to proceed (which it currently doesn't, it returns).
+          // For safety and current flow, this path means `expectation` was null.
           const currentSaved = savedCursorRef.current
           if (!currentSaved || currentSaved.index !== newActiveIndex) {
             // Selection moved to a NEW token, or from no token to a token. Update savedCursor fully.
@@ -698,6 +764,21 @@ const _TokenBox = <T,>(
     const currentSelection = window.getSelection()
     if (!currentSelection || currentSelection.rangeCount === 0) return
 
+    // Initial log for entry and basic state
+    const rangeForLog = currentSelection.getRangeAt(0)
+    const localActiveTokenForLog = activeTokenRef.current
+    const activeIndexForLog = localActiveTokenForLog
+      ? parseInt(localActiveTokenForLog.getAttribute('data-token-id')!)
+      : null
+    const currentTextForLog = localActiveTokenForLog
+      ? localActiveTokenForLog.textContent === ZWS
+        ? ''
+        : localActiveTokenForLog.textContent || ''
+      : ''
+    console.log(
+      `[handleRemoveTokenOnKeyDown ENTRY] key: ${e.key}, selectAllState: ${selectAllState}, activeIndex: ${activeIndexForLog}, startOffset: ${rangeForLog.startOffset}, currentTextLength: ${currentTextForLog.length}, currentText: "${currentTextForLog}"`
+    )
+
     if (selectAllState === 'token') {
       const localActiveToken = activeTokenRef.current
       if (
@@ -758,7 +839,10 @@ const _TokenBox = <T,>(
       const activeTokenIdStr = localActiveToken.getAttribute('data-token-id')
       if (!activeTokenIdStr) return
       const activeIndex = parseInt(activeTokenIdStr)
-      const currentText = localActiveToken.textContent || ''
+      const currentText =
+        localActiveToken.textContent === ZWS
+          ? ''
+          : localActiveToken.textContent || '' // Use ZWS logic
       const textNode = localActiveToken.firstChild
 
       // Ensure we are operating on the text node directly or a selection that starts/ends within it.
@@ -774,9 +858,64 @@ const _TokenBox = <T,>(
           // Single character deletion
           if (e.key === 'Backspace') {
             if (startOffset === 0) {
-              // Backspace at the beginning of an editable token - potentially merge or remove token
-              // This will be handled by the later logic in this function.
+              // Backspace at the beginning of an editable token.
+              if (activeIndex > 0) {
+                // There's a previous token to merge with
+                e.preventDefault() // We are handling this merge.
+
+                const prevTokenIndex = activeIndex - 1
+                // Ensure tokens array is accessed correctly from component scope
+                const prevTokenValue = tokens[prevTokenIndex]
+                const currentTokenValue = tokens[activeIndex]
+
+                // Treat ZWS as empty for merge purposes, otherwise use stringified value
+                const prevTokenTextForMerge = String(
+                  prevTokenValue === ZWS ? '' : (prevTokenValue ?? '')
+                )
+                const currentTokenTextForMerge = String(
+                  currentTokenValue === ZWS ? '' : (currentTokenValue ?? '')
+                )
+
+                const mergedText =
+                  prevTokenTextForMerge + currentTokenTextForMerge
+                const newParsedMergedToken = parseToken(mergedText) // Use component's parseToken
+
+                if (newParsedMergedToken !== null) {
+                  const newTokensState = [...tokens]
+                  newTokensState[prevTokenIndex] = newParsedMergedToken // Update previous token
+                  newTokensState.splice(activeIndex, 1) // Remove current token
+
+                  // Remove the spacer that was after the prevToken (between prev and current)
+                  const newSpacerCharsState = [...spacerChars]
+                  newSpacerCharsState.splice(prevTokenIndex, 1)
+
+                  setTokens(newTokensState)
+                  setSpacerChars(newSpacerCharsState)
+
+                  savedCursorRef.current = {
+                    index: prevTokenIndex,
+                    offset: prevTokenTextForMerge.length
+                  }
+                  programmaticCursorExpectationRef.current =
+                    savedCursorRef.current
+                  // selectAllStateRef.current = 'none'; // Consider if selectAllState needs reset
+                  return // Merge handled
+                } else {
+                  // Merge failed (e.g., parseToken returned null for merged content)
+                  console.warn(
+                    '[handleRemoveTokenOnKeyDown] Merge attempt failed: parseToken returned null for merged text. No action taken.'
+                  )
+                  // Event is already prevented. Return to avoid falling through to other deletion logic.
+                  return
+                }
+              } else {
+                // Backspace at the start of the *first* token.
+                // Let this fall through to existing boundary logic or native handling if not further handled.
+                // The defaultPrevented check later will determine if it proceeds.
+                // For now, this path doesn't call e.preventDefault() itself.
+              }
             } else {
+              // Intra-token backspace (not at startOffset 0)
               e.preventDefault()
               newText =
                 currentText.slice(0, startOffset - 1) +
@@ -784,10 +923,70 @@ const _TokenBox = <T,>(
               newCursorOffset = startOffset - 1
             }
           } else if (e.key === 'Delete') {
+            console.log(
+              `[handleRemoveTokenOnKeyDown] Delete key pressed. activeIndex: ${activeIndex}, startOffset: ${startOffset}, currentText.length: ${currentText.length}`
+            )
             if (startOffset === currentText.length) {
-              // Delete at the end of an editable token - potentially merge or remove token
-              // This will be handled by the later logic in this function.
+              console.log(
+                `[handleRemoveTokenOnKeyDown] Delete at end of token. activeIndex: ${activeIndex}, tokens.length: ${tokens.length}`
+              )
+              // Delete at the end of an editable token - potentially merge with next token.
+              if (activeIndex < tokens.length - 1) {
+                // There's a next token to merge with
+                console.log(
+                  `[handleRemoveTokenOnKeyDown] Attempting merge with next. Prev token: "${tokens[activeIndex]}", Next token: "${tokens[activeIndex + 1]}"`
+                )
+                e.preventDefault() // We are handling this merge.
+
+                const nextTokenIndex = activeIndex + 1
+                const currentTokenValue = tokens[activeIndex]
+                const nextTokenValue = tokens[nextTokenIndex]
+
+                // Treat ZWS as empty for merge purposes, otherwise use stringified value
+                const currentTokenTextForMerge = String(
+                  currentTokenValue === ZWS ? '' : (currentTokenValue ?? '')
+                )
+                const nextTokenTextForMerge = String(
+                  nextTokenValue === ZWS ? '' : (nextTokenValue ?? '')
+                )
+
+                const mergedText =
+                  currentTokenTextForMerge + nextTokenTextForMerge
+                const newParsedMergedToken = parseToken(mergedText) // Use component's parseToken
+
+                if (newParsedMergedToken !== null) {
+                  const newTokensState = [...tokens]
+                  newTokensState[activeIndex] = newParsedMergedToken // Update current token
+                  newTokensState.splice(nextTokenIndex, 1) // Remove next token
+
+                  // Remove the spacer that was after the currentToken (between current and next)
+                  const newSpacerCharsState = [...spacerChars]
+                  // The spacer to remove is the one at currentToken's original index
+                  newSpacerCharsState.splice(activeIndex, 1)
+
+                  setTokens(newTokensState)
+                  setSpacerChars(newSpacerCharsState)
+
+                  savedCursorRef.current = {
+                    index: activeIndex,
+                    offset: currentTokenTextForMerge.length // Cursor at end of original current token part
+                  }
+                  programmaticCursorExpectationRef.current =
+                    savedCursorRef.current
+                  return // Merge handled
+                } else {
+                  // Merge failed
+                  console.warn(
+                    '[handleRemoveTokenOnKeyDown] Merge attempt (Delete) failed: parseToken returned null for merged text. No action taken.'
+                  )
+                  return // Event is already prevented.
+                }
+              } else {
+                // Delete at the end of the *last* token.
+                // Let this fall through to existing boundary logic or native handling.
+              }
             } else {
+              // Intra-token delete
               e.preventDefault()
               newText =
                 currentText.slice(0, startOffset) +
@@ -804,7 +1003,7 @@ const _TokenBox = <T,>(
         }
 
         if (e.defaultPrevented) {
-          // If we handled it (i.e., an intra-token change)
+          // If we handled it (i.e., an intra-token change or a successful merge that called preventDefault)
           const newTokenValue = parseToken(newText)
           if (newTokenValue !== null) {
             setTokens((prevTokens) => {
@@ -919,7 +1118,7 @@ const _TokenBox = <T,>(
       if (tokenId) {
         e.preventDefault()
         // Potentially merge text if the token being removed is adjacent to another editable token
-        // For now, just remove it.
+        // For now, just remove it. //This comment is from original code, merge is now handled above for backspace.
         removeToken(parseInt(tokenId))
       }
       return
@@ -978,7 +1177,7 @@ const _TokenBox = <T,>(
             const prevTokenValue = tokens[nextCursorIndex]
             nextCursorOffset = String(prevTokenValue ?? '').length
           } else {
-            nextCursorIndex = 0
+            nextCursorIndex = 0 // Was 0, should remain 0 if first token is removed and others exist
             nextCursorOffset = 0
           }
         } else {
@@ -989,6 +1188,10 @@ const _TokenBox = <T,>(
       setTokens((prev) => {
         if (index < 0 || index >= prev.length) return prev
         const newTokens = prev.filter((_, i) => i !== index)
+
+        // Update spacerCharsListRef as well
+        const newSpacerCharsList = spacerChars.filter((_, i) => i !== index)
+        setSpacerChars(newSpacerCharsList)
 
         if (
           nextCursorIndex !== null &&
@@ -1017,7 +1220,7 @@ const _TokenBox = <T,>(
         return newTokens
       })
     },
-    [tokens, onTokenFocus, setTokens]
+    [tokens, onTokenFocus, setTokens, spacerChars, setSpacerChars]
   )
 
   React.useLayoutEffect(() => {
@@ -1269,30 +1472,172 @@ const _TokenBox = <T,>(
         activeTokenRef.current &&
         activeTokenRef.current.getAttribute('data-token-editable') === 'true'
       ) {
-        e.preventDefault()
-        const currentText = activeTokenRef.current.textContent || ''
-        const textToParseForCommit = currentText === ZWS ? '' : currentText
-        const committedValue = parseToken(textToParseForCommit)
+        e.preventDefault() // Prevent default early, as we are likely handling it.
+
+        const activeTokenElement = activeTokenRef.current
+        const activeIndex = parseInt(
+          activeTokenElement.getAttribute('data-token-id')!
+        )
+        const currentTokenText =
+          (activeTokenElement.textContent === ZWS
+            ? ''
+            : activeTokenElement.textContent) || ''
+
+        let charOffsetInToken = -1
+        const selection = window.getSelection()
+
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0)
+          const container = range.startContainer
+          const offset = range.startOffset
+
+          if (activeTokenElement.contains(container)) {
+            if (
+              container.nodeType === Node.TEXT_NODE &&
+              container.parentElement === activeTokenElement
+            ) {
+              charOffsetInToken = offset
+              if (
+                container.textContent === ZWS &&
+                currentTokenText === '' &&
+                charOffsetInToken === 1
+              ) {
+                // If token is ZWS (appears as length 1 in DOM) but logically empty string,
+                // and cursor is at offset 1 (after ZWS), treat as offset 0 for splitting ''
+                charOffsetInToken = 0
+              }
+            } else if (container === activeTokenElement) {
+              // Cursor on the token span. Use savedCursor if available and for this token.
+              if (
+                savedCursorRef.current &&
+                savedCursorRef.current.index === activeIndex
+              ) {
+                charOffsetInToken = savedCursorRef.current.offset
+              } else {
+                // Fallback: offset 0 is start, >0 might be end. For splitting, this is ambiguous.
+                charOffsetInToken = offset === 0 ? 0 : currentTokenText.length
+              }
+            } else {
+              // Cursor in nested element or complex scenario. Try savedCursor.
+              if (
+                savedCursorRef.current &&
+                savedCursorRef.current.index === activeIndex
+              ) {
+                charOffsetInToken = savedCursorRef.current.offset
+              } else {
+                // Still can't determine, default to end to avoid splitting errors
+                charOffsetInToken = currentTokenText.length
+              }
+            }
+          }
+        }
+        // Final safety clamp for charOffsetInToken
+        if (charOffsetInToken < 0 && currentTokenText.length > 0)
+          charOffsetInToken = currentTokenText.length
+        else if (charOffsetInToken < 0) charOffsetInToken = 0
+        if (charOffsetInToken > currentTokenText.length)
+          charOffsetInToken = currentTokenText.length
+
+        const canSplit =
+          currentTokenText !== '' && // Cannot split an truly empty string token
+          charOffsetInToken > 0 &&
+          charOffsetInToken < currentTokenText.length
+
+        console.log(
+          `[handleKeyDown commitChar] char: '${e.key}', activeIndex: ${activeIndex}, ` +
+            `currentTokenText: "${currentTokenText}" (len: ${currentTokenText.length}), ` +
+            `charOffsetInToken: ${charOffsetInToken}, canSplit: ${canSplit}`
+        )
+
+        if (canSplit) {
+          const textBeforeSplit = currentTokenText.substring(
+            0,
+            charOffsetInToken
+          )
+          const textAfterSplit = currentTokenText.substring(charOffsetInToken)
+
+          const token1 = parseToken(textBeforeSplit)
+          const token2 = parseToken(textAfterSplit)
+
+          if (token1 !== null && token2 !== null) {
+            console.log(
+              `[handleKeyDown commitChar] SPLIT successful. token1: "${String(token1)}", token2: "${String(token2)}"`
+            )
+            const newTokens = [...tokens]
+            newTokens[activeIndex] = token1
+            newTokens.splice(activeIndex + 1, 0, token2)
+
+            const newSpacerCharsList = [...spacerChars]
+            if (displayCommitCharSpacer) {
+              newSpacerCharsList[activeIndex] = e.key
+            } else {
+              newSpacerCharsList[activeIndex] = null
+            }
+            newSpacerCharsList.splice(activeIndex + 1, 0, null) // Spacer for the new token2
+
+            setTokens(newTokens)
+            setSpacerChars(newSpacerCharsList)
+            savedCursorRef.current = { index: activeIndex + 1, offset: 0 } // Cursor at start of the second part (token2)
+            programmaticCursorExpectationRef.current = savedCursorRef.current
+            return // Split handled
+          } else {
+            console.warn(
+              `[handleKeyDown commitChar] SPLIT failed: parseToken returned null for one/both parts. ` +
+                `Before: "${textBeforeSplit}" (parsed: ${token1}), After: "${textAfterSplit}" (parsed: ${token2}). No action taken.`
+            )
+            return // Explicitly do nothing more if split parsing fails, default was already prevented
+          }
+        }
+
+        // Fallback to standard commit logic (if not split)
+        console.log(
+          `[handleKeyDown commitChar] Not a split scenario or split failed. Proceeding with standard commit. ` +
+            `Full text: "${currentTokenText}", charOffsetInToken: ${charOffsetInToken}`
+        )
+        const committedValue = parseToken(currentTokenText) // Parse the original full text
 
         if (committedValue !== null) {
-          const activeIndex = parseInt(
-            activeTokenRef.current.getAttribute('data-token-id')!
-          )
-          const newTokens = [...tokens]
-          newTokens[activeIndex] = committedValue
+          const newTokens = [...tokens] // Start with current tokens
+          newTokens[activeIndex] = committedValue // Update the current token with its (potentially re-parsed) full value
 
           let focusMovedToNewToken = false
+          const newSpacerCharsList = [...spacerChars] // Start with current spacers
+
           if (addNewTokenOnCommit) {
             let valueForNewSlot: T | undefined | null = defaultNewTokenValue
             if (valueForNewSlot === undefined) {
-              valueForNewSlot = parseToken('')
+              valueForNewSlot = parseToken('') // Default new token is usually empty
             }
 
             if (valueForNewSlot !== null) {
-              newTokens.splice(activeIndex + 1, 0, valueForNewSlot)
+              newTokens.splice(activeIndex + 1, 0, valueForNewSlot) // Insert new token
+
+              // Spacer logic for commit
+              if (displayCommitCharSpacer) {
+                newSpacerCharsList[activeIndex] = e.key // Spacer for the committed token (original activeIndex)
+              } else {
+                newSpacerCharsList[activeIndex] = null
+              }
+              // Add spacer for the newly added token
+              // Ensure spacer list is long enough if new token is at the very end
+              while (newSpacerCharsList.length <= activeIndex + 1)
+                newSpacerCharsList.push(null)
+              newSpacerCharsList.splice(activeIndex + 1, 0, null) // Insert null spacer for new token
+              // If splice results in too many, trim (though logic above should keep it sync with newTokens)
+              if (newSpacerCharsList.length > newTokens.length) {
+                newSpacerCharsList.length = newTokens.length
+              }
+
               savedCursorRef.current = { index: activeIndex + 1, offset: 0 }
+              programmaticCursorExpectationRef.current = savedCursorRef.current
               focusMovedToNewToken = true
+            } else {
+              // New token slot was null, don't add spacer char if no new token follows
+              newSpacerCharsList[activeIndex] = null
             }
+          } else {
+            // Not adding new token, so no spacer character is logically placed *after* this token for commit
+            newSpacerCharsList[activeIndex] = null
           }
 
           if (!focusMovedToNewToken) {
@@ -1301,23 +1646,28 @@ const _TokenBox = <T,>(
               index: activeIndex,
               offset: committedTokenTextLength
             }
+            programmaticCursorExpectationRef.current = savedCursorRef.current
           }
-
+          console.log(
+            '[handleKeyDown commitChar] Standard commit: Attempting to set tokens:',
+            newTokens,
+            'and spacerChars:',
+            newSpacerCharsList
+          )
+          setSpacerChars(newSpacerCharsList)
           setTokens(newTokens)
         } else {
-          // Value committed to null, typically means the token might be removed or reverted.
-          // Current logic in onInput (if textToParse is empty and parseToken returns null)
-          // would remove the token. If commitOnChars leads to invalid token,
-          // we might want to remove it here too or let existing mechanisms handle it.
-          // For now, if committedValue is null, we do nothing, relying on other handlers
-          // or subsequent input to clean up. This matches previous lack of domKey increment here.
+          console.warn(
+            `[handleKeyDown commitChar] Standard commit: parseToken returned null for full text "${currentTokenText}". Doing nothing.`
+          )
         }
-      } else {
-        if (e.key === 'Enter') {
-          e.preventDefault()
-        }
+        return // End of commit char handling (standard path)
       }
-      return
+      // Potentially handle e.key === 'Enter' if it's NOT a commitOnChar but needs special global handling
+      // (This part of the original logic seems fine if Enter isn't a commit char)
+      if (e.key === 'Enter') {
+        e.preventDefault()
+      }
     }
   }
 
@@ -1432,11 +1782,69 @@ const _TokenBox = <T,>(
             const currentOffset = range.startOffset
             if (event.inputType === 'deleteContentBackward') {
               if (currentOffset === 0) {
-                // Backspace at start of token - let onKeyDown handle merge/token removal
+                // CHECK FOR SPACER DELETION HERE
+                if (activeIndex > 0 && spacerChars[activeIndex - 1]) {
+                  e.preventDefault()
+                  const newSpacerChars = [...spacerChars]
+                  newSpacerChars[activeIndex - 1] = null
+                  setSpacerChars(newSpacerChars)
+                  const prevTokenForCursor = localCurrentTokens[activeIndex - 1]
+                  savedCursorRefObj.current = {
+                    index: activeIndex - 1,
+                    offset: String(prevTokenForCursor ?? '').length
+                  }
+                  programmaticCursorExpectationRef.current =
+                    savedCursorRefObj.current
+                  return // Spacer deletion handled
+                }
+
+                // TOKEN MERGE LOGIC
+                if (activeIndex > 0) {
+                  const prevTokenValue = localCurrentTokens[activeIndex - 1]
+                  const currentTokenValue = localCurrentTokens[activeIndex]
+                  const currentTokenTextForMerge =
+                    currentTokenValue === ZWS
+                      ? ''
+                      : String(currentTokenValue ?? '')
+                  const prevTokenTextForMerge =
+                    prevTokenValue === ZWS ? '' : String(prevTokenValue ?? '')
+                  const mergedText =
+                    prevTokenTextForMerge + currentTokenTextForMerge
+                  const newParsedMergedToken = parseTokenFn(mergedText)
+
+                  if (newParsedMergedToken !== null) {
+                    e.preventDefault()
+                    const updatedTokens = [...localCurrentTokens]
+                    updatedTokens[activeIndex - 1] = newParsedMergedToken
+                    const finalNewTokens = updatedTokens.filter(
+                      (_, idx) => idx !== activeIndex
+                    )
+                    const finalNewSpacerChars = spacerChars.filter(
+                      (_, idx) => idx !== activeIndex - 1
+                    )
+
+                    setTokensFn(finalNewTokens as TIn[])
+                    setSpacerChars(finalNewSpacerChars)
+
+                    savedCursorRefObj.current = {
+                      index: activeIndex - 1,
+                      offset: prevTokenTextForMerge.length
+                    }
+                    programmaticCursorExpectationRef.current =
+                      savedCursorRefObj.current
+                    return // Merge handled successfully
+                  } else {
+                    console.warn(
+                      '[_onBeforeInputHandler] Token merge attempt failed (invalid token), falling through.'
+                    )
+                  }
+                }
+
+                // Fall-through if not handled by spacer deletion or successful merge
                 console.log(
-                  '[_onBeforeInputHandler] Backspace at start of text node. Letting onKeyDown handle.'
+                  '[_onBeforeInputHandler] Backspace at start of text node (no spacer/merge occurred). Letting onKeyDown handle.'
                 )
-                return
+                return // Let onKeyDown take over
               }
               newTextForToken =
                 currentTextInToken.slice(0, currentOffset - 1) +
@@ -1449,81 +1857,113 @@ const _TokenBox = <T,>(
                 console.log(
                   '[_onBeforeInputHandler] Delete at end of text node. Letting onKeyDown handle.'
                 )
+                // CHECK FOR SPACER DELETION HERE
+                if (
+                  activeIndex < localCurrentTokens.length - 1 &&
+                  spacerChars[activeIndex]
+                ) {
+                  e.preventDefault()
+                  const newSpacerChars = [...spacerChars]
+                  newSpacerChars[activeIndex] = null
+                  setSpacerChars(newSpacerChars)
+                  // Cursor remains at start of current token (which is effectively the position after the deleted spacer)
+                  savedCursorRefObj.current = {
+                    index: activeIndex,
+                    offset: 0 // Or should it be next token, offset 0 if spacer was between active and next?
+                    // Let's assume for now it is end of current, which becomes start of next logically.
+                    // Current token's content is not changed. Cursor should be at its end.
+                    // No, cursor should be at start of current token, as the spacer *after* it was deleted.
+                  }
+                  // Correction: If spacer after current token is deleted, cursor should effectively be at end of current token,
+                  // effectively being before the *next* token.
+                  // Let's re-evaluate cursor placement for spacer deletion.
+                  // If we delete spacer after token A (index `activeIndex`), cursor should effectively be at end of token A.
+                  // The *next* token is `activeIndex + 1`.
+
+                  // If we delete `spacerCharsListRef.current[activeIndex]`, that spacer was *after* `tokens[activeIndex]`.
+                  // The cursor should remain conceptually at the end of `tokens[activeIndex]`, or start of `tokens[activeIndex+1]`
+                  // if that token is focused. Given we are in `tokens[activeIndex]`, set to its end.
+                  savedCursorRefObj.current = {
+                    index: activeIndex,
+                    offset: String(localCurrentTokens[activeIndex] ?? '').length
+                  }
+                  programmaticCursorExpectationRef.current =
+                    savedCursorRefObj.current
+                  // setTokensFn([...localCurrentTokens] as TIn[]); // Force update - REMOVING THIS
+                  return
+                }
                 return
               }
               newTextForToken =
-                currentTextInToken.slice(0, currentOffset) +
-                currentTextInToken.slice(currentOffset + 1)
-              // newCursorOffset remains currentOffset
+                currentTextInToken.slice(0, range.startOffset) +
+                currentTextInToken.slice(range.endOffset)
+              newCursorOffset = range.startOffset
             }
-          } else {
-            // Range deletion
-            newTextForToken =
-              currentTextInToken.slice(0, range.startOffset) +
-              currentTextInToken.slice(range.endOffset)
-            newCursorOffset = range.startOffset
-          }
-        } else if (currentTextInToken === '' && isDeletion) {
-          // Deleting an already empty (ZWS) token, effectively.
-          // This should ideally lead to token removal, let onKeyDown handle it.
-          console.log(
-            '[_onBeforeInputHandler] Deletion on empty (ZWS) token. Letting onKeyDown handle.'
-          )
-          return
-        } else {
-          // Complex selection or not directly on the primary text node.
-          // This might occur if selection spans multiple nodes or includes the token element itself.
-          // Let onKeyDown handle these more complex cases for now.
-          console.warn(
-            '[_onBeforeInputHandler] Deletion with complex selection or not in primary text node. Letting onKeyDown handle.'
-          )
-          return
-        }
-
-        const newValueForToken = parseTokenFn(newTextForToken)
-
-        if (newValueForToken === null) {
-          // Token becomes invalid/empty after deletion, remove it.
-          console.log(
-            '[_onBeforeInputHandler] Token became null after deletion, removing token:',
-            activeIndex
-          )
-          const newTokens = localCurrentTokens.filter(
-            (_, i) => i !== activeIndex
-          )
-          setTokensFn(newTokens as TIn[])
-
-          if (newTokens.length === 0) {
-            savedCursorRefObj.current = null
-            programmaticCursorExpectationRef.current = null
-          } else if (activeIndex >= newTokens.length) {
-            // If last token was removed
-            const lastToken = newTokens[newTokens.length - 1]
-            savedCursorRefObj.current = {
-              index: newTokens.length - 1,
-              offset: String(lastToken ?? '').length
-            }
-            programmaticCursorExpectationRef.current = savedCursorRefObj.current
-          } else {
-            // A token before the end was removed
-            savedCursorRefObj.current = { index: activeIndex, offset: 0 }
-            programmaticCursorExpectationRef.current = savedCursorRefObj.current
-          }
-        } else {
-          // Token updated
-          const newTokens = [...localCurrentTokens]
-          if (activeIndex >= 0 && activeIndex < newTokens.length) {
-            newTokens[activeIndex] = newValueForToken
-            setTokensFn(newTokens as TIn[])
-            savedCursorRefObj.current = {
-              index: activeIndex,
-              offset: newCursorOffset
-            }
-            programmaticCursorExpectationRef.current = savedCursorRefObj.current
-          } else {
-            console.error(
-              "[_onBeforeInputHandler] activeIndex out of bounds for deletion. This shouldn't happen."
+          } else if (currentTextInToken === '' && isDeletion) {
+            // Deleting an already empty (ZWS) token, effectively.
+            // This should ideally lead to token removal, let onKeyDown handle it.
+            console.log(
+              '[_onBeforeInputHandler] Deletion on empty (ZWS) token. Letting onKeyDown handle.'
             )
+            return
+          } else {
+            // Complex selection or not directly on the primary text node.
+            // This might occur if selection spans multiple nodes or includes the token element itself.
+            // Let onKeyDown handle these more complex cases for now.
+            console.warn(
+              '[_onBeforeInputHandler] Deletion with complex selection or not in primary text node. Letting onKeyDown handle.'
+            )
+            return
+          }
+
+          const newValueForToken = parseTokenFn(newTextForToken)
+
+          if (newValueForToken === null) {
+            // Token became invalid/empty after deletion, remove it.
+            console.log(
+              '[_onBeforeInputHandler] Token became null after deletion, removing token:',
+              activeIndex
+            )
+            const newTokens = localCurrentTokens.filter(
+              (_, i) => i !== activeIndex
+            )
+            setTokensFn(newTokens as TIn[])
+
+            if (newTokens.length === 0) {
+              savedCursorRefObj.current = null
+              programmaticCursorExpectationRef.current = null
+            } else if (activeIndex >= newTokens.length) {
+              // If last token was removed
+              const lastToken = newTokens[newTokens.length - 1]
+              savedCursorRefObj.current = {
+                index: newTokens.length - 1,
+                offset: String(lastToken ?? '').length
+              }
+              programmaticCursorExpectationRef.current =
+                savedCursorRefObj.current
+            } else {
+              // A token before the end was removed
+              savedCursorRefObj.current = { index: activeIndex, offset: 0 }
+              programmaticCursorExpectationRef.current =
+                savedCursorRefObj.current
+            }
+          } else {
+            // Token updated
+            const newTokens = [...localCurrentTokens]
+            if (activeIndex >= 0 && activeIndex < newTokens.length) {
+              newTokens[activeIndex] = newValueForToken
+              setTokensFn(newTokens as TIn[])
+              savedCursorRefObj.current = {
+                index: activeIndex,
+                offset: newCursorOffset
+              }
+              programmaticCursorExpectationRef.current =
+                savedCursorRefObj.current
+            } else {
+              console.error(
+                "[_onBeforeInputHandler] activeIndex out of bounds for deletion. This shouldn't happen."
+              )
+            }
           }
         }
         return // Deletion handled
@@ -1686,6 +2126,9 @@ const _TokenBox = <T,>(
       removeToken={removeToken}
       restoreCursor={restoreCursor}
       saveCursor={saveCursor}
+      spacerChars={spacerChars}
+      displayCommitCharSpacer={displayCommitCharSpacer}
+      renderSpacer={renderSpacer}
     >
       <Comp
         contentEditable
@@ -1830,6 +2273,8 @@ const TokenBoxToken = React.forwardRef<
 >(({ index, children, asChild, __scope, editable = false }, forwardedRef) => {
   const ref = React.useRef<HTMLDivElement>(null)
   const { activeTokenRef } = useTokenBoxContext(COMPONENT_NAME, __scope)
+  const { spacerChars, renderSpacer, displayCommitCharSpacer } =
+    useTokenBoxContext(COMPONENT_NAME, __scope) // Get spacer info from context
 
   let displayContent: React.ReactNode = children
   const isEffectivelyEditable =
@@ -1846,30 +2291,36 @@ const TokenBoxToken = React.forwardRef<
   const Comp = asChild ? Slot : 'span'
 
   return (
-    <Comp
-      ref={composeRefs(forwardedRef, ref)}
-      data-token-id={index}
-      data-token-editable={editable}
-      contentEditable={isEffectivelyEditable}
-      suppressContentEditableWarning
-      onBeforeInput={(e) => {
-        const event = e.nativeEvent as InputEvent
-        console.log(
-          '[TokenBoxToken onBeforeInput] SPAN Index:',
-          index,
-          'inputType:',
-          event.inputType,
-          'data:',
-          event.data,
-          'target:',
-          e.target,
-          'currentTarget:',
-          e.currentTarget
-        )
-      }}
-    >
-      {displayContent}
-    </Comp>
+    <>
+      <Comp
+        ref={composeRefs(forwardedRef, ref)}
+        data-token-id={index}
+        data-token-editable={editable}
+        contentEditable={isEffectivelyEditable}
+        suppressContentEditableWarning
+        onBeforeInput={(e) => {
+          const event = e.nativeEvent as InputEvent
+          console.log(
+            '[TokenBoxToken onBeforeInput] SPAN Index:',
+            index,
+            'inputType:',
+            event.inputType,
+            'data:',
+            event.data,
+            'target:',
+            e.target,
+            'currentTarget:',
+            e.currentTarget
+          )
+        }}
+      >
+        {displayContent}
+      </Comp>
+      {displayCommitCharSpacer &&
+        spacerChars &&
+        spacerChars[index] &&
+        renderSpacer(spacerChars[index]!, index)}
+    </>
   )
 })
 
