@@ -1,0 +1,133 @@
+export type Token<T> = {
+  id: string
+  value: T
+}
+
+// Add new types for onCharInput
+export interface TokenHandle<T> {
+  readonly value: T // The actual token value from state at the time of event
+  readonly index: number
+  readonly text: string // Current text content in the DOM at the time of event
+  readonly cursorOffset: number // Current cursor offset within this token's text at the time of event
+  readonly isEditable: boolean
+
+  /** Updates the text content of this token. */
+  update: (newText: string, newCursorOffset?: number) => void
+
+  /**
+   * Splits this token at the current cursor position.
+   * The first part of the split will be the text before the cursor.
+   * The second part will be based on the provided `textForSecondPart`.
+   */
+  split: (options: {
+    textForSecondPart: string // Raw text for the second part, will be parsed by `actions.parse()`
+    spacerChar?: string | null // Explicit spacer to insert after the first part. Undefined = default behavior.
+  }) => void
+
+  /**
+   * Commits this token's current text and adds a new token after it.
+   */
+  commit: (options: {
+    valueForNewToken: T // Already parsed value for the new token
+    spacerChar?: string | null // Explicit spacer to insert after the committed token. Undefined = default behavior.
+  }) => void
+
+  /** Removes this token. */
+  remove: () => void
+}
+
+export type OnInputGlobalActions<T> = {
+  /** Signals that the default keydown behavior (including Inlay's own default commit logic) should be prevented. */
+  preventDefault: () => void
+
+  /** Parses a string into a token value using the Inlay's configured parser. */
+  parse: (text: string) => T | null
+
+  /** Inserts a new token at the specified index. */
+  insert: (
+    index: number,
+    tokenValue: T,
+    options?: {
+      spacerCharForPrevious?: string | null
+      cursorAt?: 'start' | 'end' | { offset: number }
+    }
+  ) => void
+
+  /** Removes a token at a specific index. */
+  removeAt: (index: number) => void
+
+  /** Directly sets all tokens, the cursor position, and optionally spacers. Use with caution. */
+  replaceAll: (
+    newTokens: T[],
+    newCursor: { index: number; offset: number } | null,
+    newSpacers?: (string | null)[]
+  ) => void
+}
+
+export type OnInputContext<T> = {
+  key: string // The e.key value from KeyboardEvent
+  tokens: Readonly<T[]> // All current tokens (snapshot from state)
+  token: TokenHandle<T> | null // The handle for the active token, if any
+  actions: OnInputGlobalActions<T> // Global actions
+}
+// End of new types
+
+export type InlayContextValue<T> = {
+  onTokenChange?: (index: number, value: T) => void
+  onTokenFocus?: (index: number | null) => void
+  activeTokenRef: React.RefObject<HTMLElement | null>
+  tokens: T[]
+  updateToken: ({
+    index,
+    value,
+    setActive
+  }: {
+    index?: number
+    value: string
+    setActive?: boolean
+  }) =>
+    | {
+        index: number
+        token: T
+      }
+    | undefined
+  removeToken: (index: number) => void
+  parseToken: (value: string) => T | null
+  saveCursor: () => void
+  restoreCursor: (
+    cursorToRestore?: { index: number; offset: number } | null
+  ) => void
+  onInput: (e: React.FormEvent<HTMLDivElement>) => void
+  spacerChars: (string | null)[]
+  displayCommitCharSpacer?:
+    | boolean
+    | ((commitChar: string, afterTokenIndex: number) => React.ReactNode)
+  renderSpacer: (commitChar: string, afterTokenIndex: number) => React.ReactNode
+  onCharInput?: (context: OnInputContext<T>) => void // Uses new OnCharInputContext
+} & React.HTMLAttributes<HTMLElement>
+
+export type InlayProps<T> = {
+  children: React.ReactNode
+  asChild?: boolean
+  onTokenChange?: (index: number, value: T) => void
+  onChange?: (tokens: T[]) => void
+  onFocus?: (index: number | null) => void
+  parse: (value: string) => T | null
+  value?: T[]
+  defaultValue?: T[]
+  commitOnChars?: string[]
+  defaultNewTokenValue?: T
+  addNewTokenOnCommit?: boolean
+  insertSpacerOnCommit?: boolean // New prop
+  displayCommitCharSpacer?:
+    | boolean
+    | ((commitChar: string, afterTokenIndex: number) => React.ReactNode)
+  onInput?: (context: OnInputContext<T>) => void // Added new prop
+} & Omit<React.HTMLAttributes<HTMLElement>, 'onChange' | 'onFocus' | 'onInput'>
+
+export type InlayTokenProps = {
+  index: number
+  children: React.ReactNode
+  asChild?: boolean
+  editable?: boolean
+}
