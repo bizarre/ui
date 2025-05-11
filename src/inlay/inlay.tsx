@@ -21,6 +21,7 @@ import {
 import { useMemoizedCallback } from './hooks/useMemoizedCallback'
 import { useCopyHandler } from './hooks/useCopyHandler'
 import { usePasteHandler } from './hooks/usePasteHandler'
+import { useCustomSelectionDrawing } from './hooks/useCustomSelectionDrawing'
 
 const [createInlayContext] = createContextScope(COMPONENT_NAME)
 
@@ -44,8 +45,16 @@ const _Inlay = <T,>(
     insertSpacerOnCommit = true,
     displayCommitCharSpacer = false,
     onInput: onCharInput,
+    style,
+    enableCustomSelectionDrawing = true,
+    className,
     ...props
-  }: ScopedProps<InlayProps<T>>,
+  }: ScopedProps<
+    InlayProps<T> & {
+      enableCustomSelectionDrawing?: boolean
+      className?: string
+    }
+  >,
   forwardedRef: React.Ref<HTMLElement>
 ) => {
   const memoizedOnTokenFocus = useMemoizedCallback(onTokenFocus)
@@ -132,6 +141,7 @@ const _Inlay = <T,>(
             contentEditable="false"
             suppressContentEditableWarning
             style={{ whiteSpace: 'pre' }}
+            data-spacer-after-token={afterTokenIndex}
           >
             {commitChar}
           </span>
@@ -163,6 +173,70 @@ const _Inlay = <T,>(
     index: number
     offset: number
   } | null>(null)
+
+  const canvasRef = React.useRef<HTMLCanvasElement>(null)
+  const [desiredLineHeight, setDesiredLineHeight] = React.useState(20)
+  const uniqueId = React.useId()
+
+  // Instantiate the custom selection drawing hook
+  const highlightRects = useCustomSelectionDrawing<T>({
+    mainDivRef: ref,
+    isEnabled: enableCustomSelectionDrawing,
+    tokens: tokens,
+    spacerChars: spacerChars,
+    _getEditableTextValue: _getEditableTextValue
+  })
+
+  // Effect to measure and cache the desiredLineHeight from the Inlay.Root
+  React.useLayoutEffect(() => {
+    if (ref.current) {
+      const computedStyle = window.getComputedStyle(ref.current)
+      const lh = parseFloat(computedStyle.lineHeight)
+      if (!isNaN(lh) && lh > 0) {
+        setDesiredLineHeight(lh)
+        console.log('[_Inlay] Measured desiredLineHeight:', lh)
+      } else if (computedStyle.lineHeight === 'normal') {
+        // Estimate for 'normal' based on font size
+        const fontSize = parseFloat(computedStyle.fontSize)
+        if (!isNaN(fontSize)) {
+          const estimatedLh = Math.round(fontSize * 1.2) // Common heuristic for 'normal'
+          setDesiredLineHeight(estimatedLh)
+          console.log(
+            '[_Inlay] Estimated desiredLineHeight for "normal":',
+            estimatedLh
+          )
+        }
+      }
+    }
+  }, [])
+
+  // Effect to draw selection highlights on the canvas
+  React.useEffect(() => {
+    const canvas = canvasRef.current
+    const mainDiv = ref.current
+    if (!canvas || !mainDiv) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const inlayRect = mainDiv.getBoundingClientRect()
+
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = Math.floor(inlayRect.width * dpr)
+    canvas.height = Math.floor(inlayRect.height * dpr)
+    canvas.style.width = inlayRect.width + 'px'
+    canvas.style.height = inlayRect.height + 'px'
+    ctx.scale(dpr, dpr)
+
+    ctx.clearRect(0, 0, inlayRect.width, inlayRect.height)
+
+    // TODO: Make selection color configurable via props or CSS variables
+    ctx.fillStyle = 'rgba(0, 120, 215, 0.3)' // Example selection color
+
+    highlightRects.forEach((rect) => {
+      ctx.fillRect(rect.x, rect.y, rect.width, desiredLineHeight)
+    })
+  }, [highlightRects, desiredLineHeight, ref, canvasRef])
 
   useSelectionChangeHandler({
     mainDivRef: ref,
@@ -762,6 +836,9 @@ const _Inlay = <T,>(
 
   const Comp = asChild ? Slot : 'div'
 
+  const rootClassName = `inlay-root-${uniqueId.replace(/:/g, '')}`
+  const combinedClassName = [className, rootClassName].filter(Boolean).join(' ')
+
   return (
     <InlayProvider
       scope={__scope}
@@ -781,6 +858,20 @@ const _Inlay = <T,>(
       _registerEditableTextValue={_registerEditableTextValue}
       _getEditableTextValue={_getEditableTextValue}
     >
+      {enableCustomSelectionDrawing && (
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+            .${rootClassName} ::selection {
+              background-color: transparent !important;
+            }
+            .${rootClassName} ::-moz-selection {
+              background-color: transparent !important;
+            }
+          `
+          }}
+        />
+      )}
       <Comp
         contentEditable
         suppressContentEditableWarning
@@ -788,8 +879,23 @@ const _Inlay = <T,>(
         onBeforeInput={onBeforeInputEventHanlder}
         onKeyDown={onKeyDownEventHandler}
         ref={composeRefs(forwardedRef, ref)}
+        style={{ ...style, position: 'relative' }}
+        className={combinedClassName}
         {...props}
       >
+        <canvas
+          ref={canvasRef}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+            zIndex: -1
+          }}
+          aria-hidden="true"
+        />
         {children}
       </Comp>
     </InlayProvider>

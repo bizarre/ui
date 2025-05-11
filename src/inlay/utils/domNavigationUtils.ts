@@ -19,6 +19,15 @@ export const calculateOffsetInTextProvider = (
   selectionRefNode: Node | null,
   selectionRefOffset: number
 ): number => {
+  console.log('[calculateOffsetInTextProvider] Inputs:', {
+    textProviderContent: textProvider.textContent,
+    containerType: container.nodeType,
+    containerContent: container.textContent,
+    offsetInContainer,
+    selectionRefNodeContent: selectionRefNode?.textContent,
+    selectionRefOffset
+  })
+
   let calculatedInternalOffset = 0
   if (textProvider.contains(container)) {
     if (container === textProvider) {
@@ -94,10 +103,21 @@ export const calculateOffsetInTextProvider = (
     }
     const fullText = textProvider.textContent || ''
     // Ensure offset is not greater than the actual text content length (especially after ZWS removal)
-    return Math.min(
+    console.log(
+      '[calculateOffsetInTextProvider] Result:',
+      calculatedInternalOffset,
+      'Full text length (for Math.min):',
+      (textProvider.textContent || '').length
+    )
+    const finalOffset = Math.min(
       calculatedInternalOffset,
       fullText === ZWS ? 0 : fullText.length
     )
+    console.log(
+      '[calculateOffsetInTextProvider] Final clamped result:',
+      finalOffset
+    )
+    return finalOffset
   }
   // Fallback if container is not within textProvider (should ideally not be reached if checks are done prior)
   return (textProvider.textContent || '').length
