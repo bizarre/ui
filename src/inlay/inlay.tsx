@@ -19,6 +19,7 @@ import {
   type SelectAllState
 } from './hooks/useSelectionChangeHandler'
 import { useMemoizedCallback } from './hooks/useMemoizedCallback'
+import { useCopyHandler } from './hooks/useCopyHandler'
 
 const [createInlayContext] = createContextScope(COMPONENT_NAME)
 
@@ -714,6 +715,14 @@ const _Inlay = <T,>(
     displayCommitCharSpacer: memoizedDisplayCommitCharSpacer,
     _getEditableTextValue,
     forceImmediateRestoreRef
+  })
+
+  // Call the useCopyHandler hook
+  useCopyHandler<T>({
+    mainDivRef: ref,
+    tokens,
+    spacerChars,
+    _getEditableTextValue
   })
 
   const Comp = asChild ? Slot : 'div'

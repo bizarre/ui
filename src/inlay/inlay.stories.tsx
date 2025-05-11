@@ -105,7 +105,11 @@ export const Mentions = () => {
         {value.map((token, index) => (
           <MentionInlay.Token key={index} index={index} editable>
             {typeof token === 'string' ? (
-              <MentionInlay.EditableText value={token} index={index} />
+              <MentionInlay.EditableText
+                className="h-4"
+                value={token}
+                index={index}
+              />
             ) : (
               <span className="inline-flex items-center font-semibold">
                 <img
