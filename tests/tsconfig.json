@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "composite": true, // must be true for project references
+    "declaration": true, // composite requires declarations
+    "emitDeclarationOnly": true, // only emit .d.ts files (optional)
+    "noEmit": false // ensure emit is allowed
+  },
+  "include": ["tests/**/*.ts", "tests/**/*.tsx"]
+}

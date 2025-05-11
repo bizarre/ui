@@ -107,10 +107,21 @@ export function useBeforeInputHandler<T>({
           if (!selection || selection.rangeCount === 0) return
 
           const range = selection.getRangeAt(0)
-          const currentTextInToken =
-            activeTokenElement.textContent === ZWS
-              ? ''
-              : activeTokenElement.textContent || ''
+
+          let currentTextInToken = ''
+          if (activeTokenElement) {
+            const editableRegion = activeTokenElement.querySelector(
+              '[data-inlay-editable-region="true"]'
+            )
+            if (editableRegion) {
+              const regionText = editableRegion.textContent || ''
+              currentTextInToken = regionText === ZWS ? '' : regionText
+            } else {
+              const tokenText = activeTokenElement.textContent || ''
+              currentTextInToken = tokenText === ZWS ? '' : tokenText
+            }
+          }
+
           let newTextForToken = currentTextInToken
           let newCursorOffset = range.startOffset
 
@@ -308,10 +319,20 @@ export function useBeforeInputHandler<T>({
           const charTyped = event.data
           e.preventDefault() // Prevent browser's native insertion
 
-          const currentTextInToken =
-            activeTokenElement.textContent === ZWS
-              ? ''
-              : activeTokenElement.textContent || ''
+          let currentTextInToken = ''
+          if (activeTokenElement) {
+            const editableRegion = activeTokenElement.querySelector(
+              '[data-inlay-editable-region="true"]'
+            )
+            if (editableRegion) {
+              const regionText = editableRegion.textContent || ''
+              currentTextInToken = regionText === ZWS ? '' : regionText
+            } else {
+              const tokenText = activeTokenElement.textContent || ''
+              currentTextInToken = tokenText === ZWS ? '' : tokenText
+            }
+          }
+
           let newTextForToken = ''
           let newCursorOffset = 0
 

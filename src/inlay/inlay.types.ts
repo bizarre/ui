@@ -104,6 +104,18 @@ export type InlayContextValue<T> = {
     | ((commitChar: string, afterTokenIndex: number) => React.ReactNode)
   renderSpacer: (commitChar: string, afterTokenIndex: number) => React.ReactNode
   onCharInput?: (context: OnInputContext<T>) => void // Uses new OnCharInputContext
+
+  // New additions for EditableText integration
+  /**
+   * Registers or unregisters the string value of an EditableText component.
+   * Called by EditableText via useEffect.
+   * Pass `null` for text to unregister.
+   */
+  _registerEditableTextValue: (index: number, text: string | null) => void
+  /**
+   * Retrieves the registered string value for a token index, if set by an EditableText.
+   */
+  _getEditableTextValue: (index: number) => string | undefined
 } & React.HTMLAttributes<HTMLElement>
 
 export type InlayProps<T> = {
@@ -123,6 +135,13 @@ export type InlayProps<T> = {
     | boolean
     | ((commitChar: string, afterTokenIndex: number) => React.ReactNode)
   onInput?: (context: OnInputContext<T>) => void // Added new prop
+
+  /**
+   * Function to derive the display string value from a token.
+   * Essential if `T` can be an object and `Inlay.EditableText` is used,
+   * or for internal operations needing a string representation of the token.
+   */
+  getTokenDisplayValue?: (token: T) => string
 } & Omit<React.HTMLAttributes<HTMLElement>, 'onChange' | 'onFocus' | 'onInput'>
 
 export type InlayTokenProps = {

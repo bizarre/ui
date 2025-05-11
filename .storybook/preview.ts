@@ -1,4 +1,4 @@
-import type { Preview } from '@storybook/react'
+import type { Preview, Parameters } from '@storybook/react'
 import './tailwind.css'
 
 const preview: Preview = {
@@ -10,6 +10,10 @@ const preview: Preview = {
       }
     }
   }
+}
+
+export const parameters: Parameters = {
+  storyFilter: (story) => story.name.startsWith('Test')
 }
 
 export default preview

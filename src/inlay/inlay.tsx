@@ -53,6 +53,30 @@ const _Inlay = <T,>(
   } | null>(null)
   const [spacerChars, setSpacerChars] = React.useState<(string | null)[]>([])
 
+  // For EditableText integration: Map of tokenIndex -> string value
+  const editableTextValuesRef = React.useRef<{
+    [index: number]: string | undefined
+  }>({})
+
+  const _registerEditableTextValue = React.useCallback(
+    (index: number, text: string | null) => {
+      if (text === null) {
+        delete editableTextValuesRef.current[index]
+      } else {
+        editableTextValuesRef.current[index] = text
+      }
+      // console.log('[_registerEditableTextValue] Updated map:', index, text, editableTextValuesRef.current);
+    },
+    []
+  )
+
+  const _getEditableTextValue = React.useCallback(
+    (index: number): string | undefined => {
+      return editableTextValuesRef.current[index]
+    },
+    []
+  )
+
   console.log('activeTokenRef', activeTokenRef.current)
   console.log(
     '[_Inlay] Rendering with spacerChars:',
@@ -146,20 +170,68 @@ const _Inlay = <T,>(
     )
 
     if (tokenEl) {
-      const tokenId = tokenEl.getAttribute('data-token-id')
-      if (tokenId) {
-        let relativeOffset = offset
-        if (container === tokenEl) {
-          relativeOffset = tokenEl.textContent?.length ?? 0
+      const tokenIdStr = tokenEl.getAttribute('data-token-id')
+      if (tokenIdStr) {
+        const tokenIndex = parseInt(tokenIdStr)
+        let finalOffset = offset // Default to the raw offset from selection
+
+        const editableRegion = tokenEl.querySelector(
+          '[data-inlay-editable-region="true"]'
+        ) as HTMLElement | null
+
+        if (editableRegion) {
+          const editableRegionText = editableRegion.textContent || ''
+          if (
+            container === editableRegion ||
+            editableRegion.contains(container)
+          ) {
+            // Selection is within or on the editable region itself
+            // The `offset` from `sel.getRangeAt(0)` is already relative to the container (e.g., TextNode within editableRegion)
+            // Ensure it's clamped to the actual text length of the region
+            finalOffset = Math.min(
+              offset,
+              (editableRegion.firstChild?.textContent || '').length
+            )
+            if (
+              editableRegion.firstChild?.textContent === ZWS &&
+              finalOffset === 1
+            )
+              finalOffset = 0
+          } else if (container === tokenEl) {
+            // Selection is on the main token element, but an editable region exists
+            // Default to offset 0 within the editable region if it's empty (showing ZWS),
+            // or end of text if it has content (though focus should ideally be inside)
+            finalOffset =
+              editableRegionText === ZWS ? 0 : editableRegionText.length
+          } else {
+            // Selection is outside tokenEl or editableRegion (should not happen if tokenEl is the closest)
+            // Or, container is some other child of tokenEl not in editableRegion. Fallback.
+            finalOffset =
+              editableRegionText === ZWS ? 0 : editableRegionText.length
+          }
+        } else {
+          // No editable region, it's a simple token (e.g. just text content in tokenEl)
+          if (container === tokenEl) {
+            finalOffset = (tokenEl.textContent || '').length
+          } else if (tokenEl.contains(container)) {
+            // Ensure offset is clamped if container is a text node inside tokenEl
+            finalOffset = Math.min(offset, (container.textContent || '').length)
+          } else {
+            // Fallback for simple token if selection is weirdly outside
+            finalOffset = (tokenEl.textContent || '').length
+          }
         }
+
         savedCursorRef.current = {
-          index: parseInt(tokenId),
-          offset: relativeOffset
+          index: tokenIndex,
+          offset: finalOffset
         }
+        console.log('[saveCursor] Saved:', savedCursorRef.current)
         return
       }
     }
     savedCursorRef.current = null
+    console.log('[saveCursor] Cleared saved cursor (no tokenEl or tokenId)')
   }, [])
 
   const restoreCursor = React.useCallback(
@@ -178,29 +250,89 @@ const _Inlay = <T,>(
       const range = document.createRange()
       const textContent = element.textContent || ''
 
-      if (textContent === '' && saved.offset === 0) {
-        range.selectNodeContents(element)
-        range.collapse(true)
-      } else {
-        const firstChild = element.firstChild
-        if (!firstChild || firstChild.nodeType !== Node.TEXT_NODE) {
-          range.selectNodeContents(element)
-          range.collapse(true)
-          console.warn(
-            'Inlay: restoreCursor trying to set offset in a non-text node or empty token without a text node. Collapsing to start of token.'
-          )
-        } else {
-          const textNode = firstChild
-          const textLength = textNode.textContent?.length ?? 0
-          const safeOffset = Math.min(saved.offset, textLength)
+      let targetNodeForCursor: Node | null = null
+      let effectiveOffset = saved.offset
 
-          range.setStart(textNode, safeOffset)
-          range.collapse(true)
+      // Try to find the designated editable text container
+      const editableRegion = element.querySelector(
+        '[data-inlay-editable-region="true"]'
+      ) as HTMLElement | null
+
+      if (editableRegion) {
+        const regionTextContent = editableRegion.textContent || ''
+        if (
+          editableRegion.firstChild &&
+          editableRegion.firstChild.nodeType === Node.TEXT_NODE
+        ) {
+          targetNodeForCursor = editableRegion.firstChild
+          effectiveOffset = Math.min(saved.offset, regionTextContent.length)
+        } else if (regionTextContent === '' && saved.offset === 0) {
+          // Empty editable region, collapse to the region itself
+          targetNodeForCursor = editableRegion
+          effectiveOffset = 0
+        } else {
+          console.warn(
+            '[restoreCursor] Editable text region found, but it does not contain a direct text node or is not empty as expected. Collapsing to region start.'
+          )
+          targetNodeForCursor = editableRegion
+          effectiveOffset = 0
         }
+      } else if (
+        element.firstChild &&
+        element.firstChild.nodeType === Node.TEXT_NODE
+      ) {
+        // Original logic for simple string tokens (direct text node child of the token span)
+        targetNodeForCursor = element.firstChild
+        effectiveOffset = Math.min(
+          saved.offset,
+          (element.firstChild.textContent || '').length
+        )
+      } else if (textContent === '' && saved.offset === 0) {
+        // Handle completely empty token (no specific region, no text)
+        targetNodeForCursor = element
+        effectiveOffset = 0
+      } else {
+        // Last resort: collapse to the start of the main token element
+        console.warn(
+          '[restoreCursor] Complex token without a designated editable region or direct text node. Collapsing to start of token element.'
+        )
+        targetNodeForCursor = element
+        effectiveOffset = 0
       }
 
-      sel.removeAllRanges()
-      sel.addRange(range)
+      if (targetNodeForCursor) {
+        try {
+          if (targetNodeForCursor.nodeType === Node.TEXT_NODE) {
+            range.setStart(targetNodeForCursor, effectiveOffset)
+            range.collapse(true)
+          } else if (targetNodeForCursor.nodeType === Node.ELEMENT_NODE) {
+            // If it's an element (e.g., empty editableRegion or empty token element),
+            // select its contents and collapse to the start. This is suitable for making it focusable.
+            range.selectNodeContents(targetNodeForCursor)
+            range.collapse(true)
+          } else {
+            // Should not happen with the logic above
+            console.error(
+              '[restoreCursor] Target node is not Text or Element. Cannot set range.'
+            )
+            return
+          }
+          sel.removeAllRanges()
+          sel.addRange(range)
+        } catch (err) {
+          console.error('[restoreCursor] Error setting range:', err, {
+            targetNode: targetNodeForCursor,
+            effectiveOffset,
+            savedCursor: saved
+          })
+        }
+      } else {
+        console.error(
+          '[restoreCursor] Could not determine a target node for cursor placement.'
+        )
+        return // Exit if no target node determined
+      }
+
       if (sel.rangeCount > 0) {
         const currentRange = sel.getRangeAt(0)
         console.log(
@@ -409,7 +541,6 @@ const _Inlay = <T,>(
       const currentActiveTokenId =
         activeTokenRef.current?.getAttribute('data-token-id')
       let nextCursorIndex: number | null = null
-      let nextCursorOffset = 0
 
       if (
         currentActiveTokenId === index.toString() ||
@@ -421,11 +552,8 @@ const _Inlay = <T,>(
         if (tokens.length > 1) {
           if (index > 0) {
             nextCursorIndex = index - 1
-            const prevTokenValue = tokens[nextCursorIndex]
-            nextCursorOffset = String(prevTokenValue ?? '').length
           } else {
             nextCursorIndex = 0 // Was 0, should remain 0 if first token is removed and others exist
-            nextCursorOffset = 0
           }
         } else {
           nextCursorIndex = null
@@ -440,6 +568,34 @@ const _Inlay = <T,>(
         const newSpacerCharsList = spacerChars.filter((_, i) => i !== index)
         setSpacerChars(newSpacerCharsList)
 
+        // Helper function to get the string representation for offset calculation
+        const getTokenStringForOffset = (
+          tok: T,
+          tokenIndex: number
+        ): string => {
+          // First, try to get value from registered EditableText components
+          const registeredValue = _getEditableTextValue(tokenIndex)
+          if (registeredValue !== undefined) {
+            return registeredValue // This is the most reliable source if available
+          }
+
+          // Fallback if not registered (e.g., simple string token or complex token not using EditableText)
+          if (typeof tok === 'string') {
+            return tok
+          }
+          if (tok && typeof tok === 'object') {
+            // This object case without a registered EditableText value is inherently ambiguous.
+            // Previously, we tried to guess based on 'username'.
+            // Now, it's better to warn and return empty, or rely on a user-provided general stringifier if we had one.
+            console.warn(
+              `[getTokenStringForOffset] Token at index ${tokenIndex} is an object but has no registered EditableText value. Returning empty string.`,
+              tok
+            )
+            return '' // Default for unhandled objects without registered EditableText
+          }
+          return '' // Default for null/undefined tokens
+        }
+
         if (
           nextCursorIndex !== null &&
           newTokens.length > 0 &&
@@ -447,7 +603,10 @@ const _Inlay = <T,>(
         ) {
           savedCursorRef.current = {
             index: nextCursorIndex,
-            offset: nextCursorOffset
+            offset: getTokenStringForOffset(
+              tokens[nextCursorIndex],
+              nextCursorIndex
+            ).length
           }
         } else if (newTokens.length === 0) {
           savedCursorRef.current = null
@@ -457,7 +616,10 @@ const _Inlay = <T,>(
         ) {
           savedCursorRef.current = {
             index: newTokens.length - 1,
-            offset: String(newTokens[newTokens.length - 1] ?? '').length
+            offset: getTokenStringForOffset(
+              newTokens[newTokens.length - 1],
+              newTokens.length - 1
+            ).length
           }
         }
 
@@ -515,7 +677,8 @@ const _Inlay = <T,>(
     defaultNewTokenValue, // from _Inlay props
     addNewTokenOnCommit, // from _Inlay props (already has default)
     insertSpacerOnCommit, // from _Inlay props (already has default)
-    displayCommitCharSpacer // from _Inlay props
+    displayCommitCharSpacer, // from _Inlay props
+    _getEditableTextValue // Pass down from _Inlay context functions
   })
 
   const Comp = asChild ? Slot : 'div'
@@ -536,6 +699,8 @@ const _Inlay = <T,>(
       displayCommitCharSpacer={displayCommitCharSpacer}
       renderSpacer={renderSpacer}
       onCharInput={onCharInput as any}
+      _registerEditableTextValue={_registerEditableTextValue}
+      _getEditableTextValue={_getEditableTextValue}
     >
       <Comp
         contentEditable
@@ -557,6 +722,12 @@ const InlayToken = React.forwardRef<
   ScopedProps<InlayTokenProps>
 >(({ index, children, asChild, __scope, editable = false }, forwardedRef) => {
   const ref = React.useRef<HTMLDivElement>(null)
+  console.log(
+    '[InlayToken] Rendering token at index:',
+    index,
+    'With children:',
+    children
+  )
   const { activeTokenRef } = useInlayContext(COMPONENT_NAME, __scope)
   // Removed displayCommitCharSpacer from destructuring as it's not directly used here for the condition
   const { spacerChars, renderSpacer, tokens } = useInlayContext(
@@ -616,15 +787,64 @@ const InlayToken = React.forwardRef<
 
 InlayToken.displayName = 'InlayToken'
 
+type TokenEditableTextProps = {
+  value?: string
+  index: number
+} & Omit<React.HTMLAttributes<HTMLElement>, 'onChange' | 'onFocus' | 'onInput'>
+
+const EditableText = ({
+  value,
+  index,
+  __scope,
+  ...props
+}: ScopedProps<TokenEditableTextProps>) => {
+  const { _registerEditableTextValue } = useInlayContext(
+    COMPONENT_NAME,
+    __scope
+  )
+
+  React.useEffect(() => {
+    const actualValue = value === undefined || value === '' ? '' : value // Store empty string, not ZWS
+    _registerEditableTextValue(index, actualValue)
+    return () => {
+      _registerEditableTextValue(index, null) // Unregister on unmount
+    }
+  }, [value, index, _registerEditableTextValue])
+
+  // Render ZWS if value is empty or undefined to ensure the span is focusable and has height
+  const displayValue = value === undefined || value === '' ? ZWS : value
+  return (
+    <span
+      data-inlay-editable-region="true"
+      {...props}
+      style={{
+        display: 'inline-block',
+        minHeight: '1em',
+        minWidth: '1px',
+        ...props.style
+      }}
+    >
+      {displayValue}
+    </span>
+  )
+}
+EditableText.displayName = 'InlayEditableText'
+
 export function createInlay<T>() {
   const Root = React.forwardRef(_Inlay<T>)
   return {
     Root,
-    // The component export is named Token
     Token: InlayToken as React.ForwardRefExoticComponent<
-      InlayTokenProps & { children: T } & React.RefAttributes<HTMLDivElement>
-    >
+      InlayTokenProps & React.RefAttributes<HTMLDivElement>
+    >,
+    EditableText,
+    __type: null as unknown as T
   } as const
 }
+export type InferInlay<T> = T extends { __type: infer U } ? U : never
 
-export const { Root, Token } = createInlay<string>()
+export const {
+  Root,
+  Token,
+  EditableText: InlayEditableText
+} = createInlay<string>()

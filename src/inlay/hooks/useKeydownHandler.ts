@@ -42,6 +42,9 @@ export type UseKeydownHandlerProps<T> = {
   addNewTokenOnCommit: boolean // Needs to be passed (has default in _Inlay)
   insertSpacerOnCommit: boolean // Needs to be passed (has default in _Inlay)
   displayCommitCharSpacer?: InlayProps<T>['displayCommitCharSpacer']
+
+  // For retrieving EditableText values
+  _getEditableTextValue: (index: number) => string | undefined
 }
 
 export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
@@ -64,10 +67,39 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
     defaultNewTokenValue,
     addNewTokenOnCommit,
     insertSpacerOnCommit,
-    displayCommitCharSpacer
+    displayCommitCharSpacer,
+    _getEditableTextValue
   } = props
 
-  // handleRemoveTokenOnKeyDown logic will be moved here (as an inner function or integrated)
+  // Helper function to get the meaningful string representation of a token
+  const getActualTextForToken = (
+    tok: T | undefined | null,
+    tokenIndex: number
+  ): string => {
+    if (tok === undefined || tok === null) return ''
+
+    // First, try to get value from registered EditableText components via context
+    const registeredValue = _getEditableTextValue(tokenIndex)
+    if (registeredValue !== undefined) {
+      return registeredValue // This is the most reliable source
+    }
+
+    // Fallback if not registered
+    if (typeof tok === 'string') {
+      return tok
+    }
+
+    // For objects not using EditableText or not yet registered
+    if (typeof tok === 'object') {
+      console.warn(
+        `[getActualTextForToken] Token at index ${tokenIndex} is an object but has no registered EditableText value. Returning empty string.`,
+        tok
+      )
+      return ''
+    }
+    return '' // Should not be reached if tok is string or object
+  }
+
   const handleRemoveTokenOnKeyDownInternal = React.useCallback(
     (
       e: React.KeyboardEvent<HTMLDivElement>,
@@ -85,11 +117,21 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       )
         ? parseInt(localActiveTokenForLog.getAttribute('data-token-id')!)
         : null
-      const currentTextForLog = localActiveTokenForLog
-        ? localActiveTokenForLog.textContent === ZWS
-          ? ''
-          : localActiveTokenForLog.textContent || ''
-        : ''
+
+      let currentTextForLog = ''
+      if (localActiveTokenForLog) {
+        const editableRegion = localActiveTokenForLog.querySelector(
+          '[data-inlay-editable-region="true"]'
+        )
+        if (editableRegion) {
+          const regionText = editableRegion.textContent || ''
+          currentTextForLog = regionText === ZWS ? '' : regionText
+        } else {
+          const tokenText = localActiveTokenForLog.textContent || ''
+          currentTextForLog = tokenText === ZWS ? '' : tokenText
+        }
+      }
+
       console.log(
         `[handleRemoveTokenOnKeyDown ENTRY] key: ${e.key}, selectAllState: ${selectAllState}, activeIndex: ${activeIndexForLog}, startOffset: ${rangeForLog.startOffset}, currentTextLength: ${currentTextForLog.length}, currentText: "${currentTextForLog}"`
       )
@@ -149,43 +191,127 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
         localActiveToken.getAttribute('data-token-editable') === 'true' &&
         localActiveToken.contains(startContainer) // Check if selection is within the token
       ) {
-        const activeTokenIdStr = localActiveToken.getAttribute('data-token-id')
-        if (!activeTokenIdStr) return
-        const activeIndex = parseInt(activeTokenIdStr)
-        const currentText =
-          localActiveToken.textContent === ZWS
-            ? ''
-            : localActiveToken.textContent || ''
-        const textNode = localActiveToken.firstChild
+        const activeIndex = parseInt(
+          localActiveToken.getAttribute('data-token-id')!
+        )
+
+        // currentText is already derived correctly for logging purposes (currentTextForLog)
+        // Let's use a similar derivation for the actual text we'll be modifying.
+        let currentText = ''
+        const editableRegionNode = localActiveToken.querySelector(
+          '[data-inlay-editable-region="true"]'
+        )
+        if (editableRegionNode) {
+          const regionText = editableRegionNode.textContent || ''
+          currentText = regionText === ZWS ? '' : regionText
+        } else {
+          // Simple token
+          const tokenText = localActiveToken.textContent || ''
+          currentText = tokenText === ZWS ? '' : tokenText
+        }
+
+        // Determine if the selection's startContainer is the primary text node we are manipulating
+        let isCursorInPrimaryTextNode = false
+        let effectiveStartOffset = startOffset
 
         if (
-          textNode &&
-          textNode.nodeType === Node.TEXT_NODE &&
-          (startContainer === textNode || startContainer === localActiveToken) // Selection on text or token itself
+          editableRegionNode &&
+          editableRegionNode.firstChild &&
+          editableRegionNode.firstChild.nodeType === Node.TEXT_NODE
         ) {
+          if (startContainer === editableRegionNode.firstChild) {
+            isCursorInPrimaryTextNode = true
+          } else if (
+            startContainer === editableRegionNode &&
+            currentText.length > 0
+          ) {
+            // Selection is on the EditableText span itself, not its text node.
+            // If it's collapsed, and we have saved cursor, use that. Otherwise, could be start/end.
+            if (isCollapsed && savedCursorRef.current?.index === activeIndex) {
+              effectiveStartOffset = savedCursorRef.current.offset
+              isCursorInPrimaryTextNode = true // Assume saved cursor is valid
+            } else if (isCollapsed) {
+              // Guess: if cursor is on the span, and it's backspace, assume end; if delete, assume start.
+              // This is heuristic. A cleaner way is to ensure focus always lands inside the text node.
+              effectiveStartOffset =
+                e.key === 'Backspace' ? currentText.length : 0
+              isCursorInPrimaryTextNode = true
+            }
+          }
+        } else if (
+          !editableRegionNode &&
+          localActiveToken.firstChild &&
+          localActiveToken.firstChild.nodeType === Node.TEXT_NODE
+        ) {
+          // Simple token
+          if (startContainer === localActiveToken.firstChild) {
+            isCursorInPrimaryTextNode = true
+          } else if (
+            startContainer === localActiveToken &&
+            currentText.length > 0
+          ) {
+            // Selection on the token span itself (simple token)
+            if (isCollapsed && savedCursorRef.current?.index === activeIndex) {
+              effectiveStartOffset = savedCursorRef.current.offset
+              isCursorInPrimaryTextNode = true
+            } else if (isCollapsed) {
+              effectiveStartOffset =
+                e.key === 'Backspace' ? currentText.length : 0
+              isCursorInPrimaryTextNode = true
+            }
+          }
+        }
+
+        // If the token is effectively empty (shows ZWS, currentText is ''), treat cursor at offset 0 as being in primary text node
+        if (
+          !isCursorInPrimaryTextNode &&
+          currentText === '' &&
+          startOffset === 0 &&
+          startContainer === localActiveToken
+        ) {
+          isCursorInPrimaryTextNode = true
+          effectiveStartOffset = 0
+        }
+
+        if (isCursorInPrimaryTextNode) {
+          e.preventDefault() // CRITICAL: Prevent default if we're handling deletion within the primary text.
+
           let newText = currentText
-          let newCursorOffset = startOffset
+          let newCursorOffset = effectiveStartOffset
+
+          // Clamp effectiveStartOffset just in case
+          effectiveStartOffset = Math.max(
+            0,
+            Math.min(effectiveStartOffset, currentText.length)
+          )
+          newCursorOffset = effectiveStartOffset
 
           if (isCollapsed) {
             if (e.key === 'Backspace') {
-              if (startOffset === 0) {
+              if (effectiveStartOffset === 0) {
+                // Attempt to merge with the previous token.
+                // The merge logic itself calls e.preventDefault() and handles state updates if successful.
+                // It will return from handleRemoveTokenOnKeyDownInternal if merge happens.
+                // If no merge (e.g., first token), current e.preventDefault() stands, and no text change here.
                 if (activeIndex > 0) {
-                  e.preventDefault()
+                  // The existing merge logic will be hit if we let it fall through,
+                  // but we need to ensure it's called correctly.
+                  // For now, let the original merge logic path handle this by NOT returning early.
+                  // The original backspace-at-start merge logic:
                   const prevTokenIndex = activeIndex - 1
                   const prevTokenValue = tokens[prevTokenIndex]
-                  const currentTokenValue = tokens[activeIndex]
-                  const prevTokenTextForMerge = String(
-                    prevTokenValue === (ZWS as any)
-                      ? ''
-                      : (prevTokenValue ?? '')
+                  const currentTokenValueForMerge = tokens[activeIndex] // currentText comes from DOM, might differ from state
+                  const prevTokenTextForMerge = getActualTextForToken(
+                    prevTokenValue,
+                    prevTokenIndex
                   )
-                  const currentTokenTextForMerge = String(
-                    currentTokenValue === (ZWS as any)
-                      ? ''
-                      : (currentTokenValue ?? '')
+                  const currentTokenTextForActualMerge = getActualTextForToken(
+                    currentTokenValueForMerge,
+                    activeIndex
                   )
+
                   const mergedText =
-                    prevTokenTextForMerge + currentTokenTextForMerge
+                    prevTokenTextForMerge + currentTokenTextForActualMerge
                   const newParsedMergedToken = parseToken(mergedText)
 
                   if (newParsedMergedToken !== null) {
@@ -193,7 +319,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                     newTokensState[prevTokenIndex] = newParsedMergedToken
                     newTokensState.splice(activeIndex, 1)
                     const newSpacerCharsState = [...spacerChars]
-                    newSpacerCharsState.splice(prevTokenIndex, 1)
+                    newSpacerCharsState.splice(prevTokenIndex, 1) // Remove spacer between merged tokens
                     setTokens(newTokensState)
                     setSpacerChars(newSpacerCharsState)
                     savedCursorRef.current = {
@@ -202,40 +328,36 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                     }
                     programmaticCursorExpectationRef.current =
                       savedCursorRef.current
-                    return
-                  } else {
-                    console.warn(
-                      '[handleRemoveTokenOnKeyDown] Merge attempt failed: parseToken returned null. No action.'
-                    )
-                    return
+                    return // Merge handled
                   }
+                  // If merge fails, it's like backspace at start of first token - no-op here.
                 }
+                // If not merged (first token, or parseToken failed), no change to newText/newCursorOffset yet.
+                // e.preventDefault() has been called. This is a no-op for text change.
               } else {
-                e.preventDefault()
                 newText =
-                  currentText.slice(0, startOffset - 1) +
-                  currentText.slice(startOffset)
-                newCursorOffset = startOffset - 1
+                  currentText.slice(0, effectiveStartOffset - 1) +
+                  currentText.slice(effectiveStartOffset)
+                newCursorOffset = effectiveStartOffset - 1
               }
             } else if (e.key === 'Delete') {
-              if (startOffset === currentText.length) {
+              if (effectiveStartOffset === currentText.length) {
+                // Attempt to merge with the next token.
                 if (activeIndex < tokens.length - 1) {
-                  e.preventDefault()
                   const nextTokenIndex = activeIndex + 1
-                  const currentTokenValue = tokens[activeIndex]
+                  const currentTokenValueForMerge = tokens[activeIndex] // Use state value
                   const nextTokenValue = tokens[nextTokenIndex]
-                  const currentTokenTextForMerge = String(
-                    currentTokenValue === (ZWS as any)
-                      ? ''
-                      : (currentTokenValue ?? '')
+                  const currentTokenTextForActualMerge = getActualTextForToken(
+                    currentTokenValueForMerge,
+                    activeIndex
                   )
-                  const nextTokenTextForMerge = String(
-                    nextTokenValue === (ZWS as any)
-                      ? ''
-                      : (nextTokenValue ?? '')
+                  const nextTokenTextForMerge = getActualTextForToken(
+                    nextTokenValue,
+                    nextTokenIndex
                   )
+
                   const mergedText =
-                    currentTokenTextForMerge + nextTokenTextForMerge
+                    currentTokenTextForActualMerge + nextTokenTextForMerge
                   const newParsedMergedToken = parseToken(mergedText)
 
                   if (newParsedMergedToken !== null) {
@@ -243,57 +365,77 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                     newTokensState[activeIndex] = newParsedMergedToken
                     newTokensState.splice(nextTokenIndex, 1)
                     const newSpacerCharsState = [...spacerChars]
-                    newSpacerCharsState.splice(activeIndex, 1)
+                    newSpacerCharsState.splice(activeIndex, 1) // Remove spacer between merged tokens
                     setTokens(newTokensState)
                     setSpacerChars(newSpacerCharsState)
                     savedCursorRef.current = {
                       index: activeIndex,
-                      offset: currentTokenTextForMerge.length
+                      offset: currentTokenTextForActualMerge.length
                     }
                     programmaticCursorExpectationRef.current =
                       savedCursorRef.current
-                    return
-                  } else {
-                    console.warn(
-                      '[handleRemoveTokenOnKeyDown] Merge (Delete) failed: parseToken returned null. No action.'
-                    )
-                    return
+                    return // Merge handled
                   }
                 }
+                // If not merged (last token, or parseToken failed), no change.
               } else {
-                e.preventDefault()
                 newText =
-                  currentText.slice(0, startOffset) +
-                  currentText.slice(startOffset + 1)
-                newCursorOffset = startOffset
+                  currentText.slice(0, effectiveStartOffset) +
+                  currentText.slice(effectiveStartOffset + 1)
+                newCursorOffset = effectiveStartOffset
               }
             }
           } else {
             // Range deletion
-            e.preventDefault()
+            // Calculate end offset relative to currentText
+            // This is a simplification. True end offset in complex selections can be tricky.
+            let effectiveEndOffset =
+              effectiveStartOffset + (endOffset - startOffset)
+
+            effectiveEndOffset = Math.max(
+              effectiveStartOffset,
+              Math.min(effectiveEndOffset, currentText.length)
+            )
+
             newText =
-              currentText.slice(0, startOffset) + currentText.slice(endOffset)
-            newCursorOffset = startOffset
+              currentText.slice(0, effectiveStartOffset) +
+              currentText.slice(effectiveEndOffset)
+            newCursorOffset = effectiveStartOffset
           }
 
-          if (e.defaultPrevented) {
-            // Check if any path above called preventDefault
+          // Only proceed if text was actually changed by the intra-token logic, or if it was a boundary condition that didn't merge
+          if (
+            newText !== currentText ||
+            (e.key === 'Backspace' &&
+              effectiveStartOffset === 0 &&
+              activeIndex === 0 &&
+              currentText.length > 0 &&
+              newText !== currentText) || // Backspace at very start of content made a change
+            (e.key === 'Delete' &&
+              effectiveStartOffset === currentText.length &&
+              activeIndex === tokens.length - 1 &&
+              currentText.length > 0 &&
+              newText !== currentText) // Delete at very end of content made a change
+          ) {
             const newTokenValue = parseToken(newText)
             if (newTokenValue !== null) {
               setTokens((prevTokens) => {
                 const updatedTokens = [...prevTokens]
-                updatedTokens[activeIndex] = newTokenValue
+                if (activeIndex >= 0 && activeIndex < updatedTokens.length) {
+                  updatedTokens[activeIndex] = newTokenValue
+                }
                 return updatedTokens
               })
               savedCursorRef.current = {
                 index: activeIndex,
                 offset: newCursorOffset
               }
+              programmaticCursorExpectationRef.current = savedCursorRef.current
             } else {
               removeToken(activeIndex)
             }
-            return
           }
+          return // Intra-token modification handled (or determined to be no-op after pD)
         }
       } // End of editable token, selection inside check
 
@@ -424,10 +566,21 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
             currentActiveTokenElement.getAttribute('data-token-id')!
           )
           const currentTokenValueFromState = tokens[activeIndex]
-          const currentTextInDOM =
-            (currentActiveTokenElement.textContent === ZWS
-              ? ''
-              : currentActiveTokenElement.textContent) || ''
+
+          let currentTextInDOM = ''
+          if (currentActiveTokenElement) {
+            const editableRegion = currentActiveTokenElement.querySelector(
+              '[data-inlay-editable-region="true"]'
+            )
+            if (editableRegion) {
+              const regionText = editableRegion.textContent || ''
+              currentTextInDOM = regionText === ZWS ? '' : regionText
+            } else {
+              const tokenText = currentActiveTokenElement.textContent || ''
+              currentTextInDOM = tokenText === ZWS ? '' : tokenText
+            }
+          }
+
           const isEditable =
             currentActiveTokenElement.getAttribute('data-token-editable') ===
             'true'
@@ -639,12 +792,20 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
           const activeIndex = parseInt(
             activeTokenElement.getAttribute('data-token-id')!
           )
-          const currentTokenText =
-            (activeTokenElement.textContent === ZWS
-              ? ''
-              : activeTokenElement.textContent) || ''
+          let currentTokenText = ''
+          if (activeTokenElement) {
+            const editableRegion = activeTokenElement.querySelector(
+              '[data-inlay-editable-region="true"]'
+            )
+            if (editableRegion) {
+              const regionText = editableRegion.textContent || ''
+              currentTokenText = regionText === ZWS ? '' : regionText
+            } else {
+              const tokenText = activeTokenElement.textContent || ''
+              currentTokenText = tokenText === ZWS ? '' : tokenText
+            }
+          }
           let charOffsetInToken = -1
-          // ... (logic for charOffsetInToken as in original) ...
           const selection = window.getSelection()
           if (selection && selection.rangeCount > 0) {
             const range = selection.getRangeAt(0)
@@ -837,6 +998,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       addNewTokenOnCommit,
       insertSpacerOnCommit,
       displayCommitCharSpacer,
+      _getEditableTextValue,
       handleRemoveTokenOnKeyDownInternal // Include the memoized helper
     ]
   )
