@@ -33,7 +33,9 @@ export const Basic = () => {
           setActiveTokenIndex(index)
         }}
         style={{
-          border: '1px solid black'
+          border: '1px solid black',
+          display: 'flex',
+          outline: 'none'
         }}
         onInput={(context) => {
           console.log('onInput', context)
@@ -45,7 +47,7 @@ export const Basic = () => {
       >
         {value.map((token, index) => (
           <Inlay.Token key={index} index={index} editable>
-            {token}
+            <Inlay.EditableText value={token} index={index} />
           </Inlay.Token>
         ))}
       </Inlay.Root>
@@ -94,7 +96,7 @@ export const Mentions = () => {
         onChange={(value) => {
           setValue(value)
         }}
-        className="flex items-center p-1.5 border-slate-300 border rounded-md focus:outline-none focus:ring-2 focus:ring-slate-300"
+        className="flex items-center"
         commitOnChars={[' ']}
         displayCommitCharSpacer
         addNewTokenOnCommit

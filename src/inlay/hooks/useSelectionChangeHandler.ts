@@ -13,8 +13,22 @@ export interface UseSelectionChangeHandlerProps {
     index: number
     offset: number
   } | null>
-  selectAllStateRef: React.MutableRefObject<'none' | 'token' | 'all'>
+  selectAllStateRef: React.MutableRefObject<SelectAllState>
 }
+
+export type CrossTokenSelectionDetails = {
+  type: 'cross-token'
+  startTokenIndex: number
+  startOffset: number
+  endTokenIndex: number
+  endOffset: number
+}
+
+export type SelectAllState =
+  | 'none'
+  | 'token'
+  | 'all'
+  | CrossTokenSelectionDetails
 
 export function useSelectionChangeHandler(
   props: UseSelectionChangeHandlerProps
@@ -29,6 +43,114 @@ export function useSelectionChangeHandler(
   } = props
 
   React.useEffect(() => {
+    const getOffsetInToken = (
+      tokenEl: HTMLElement,
+      container: Node,
+      offsetInContainer: number
+    ): number => {
+      // Ensure tokenEl is valid and has textContent
+      if (!tokenEl || typeof tokenEl.textContent !== 'string') {
+        console.warn('[getOffsetInToken] Invalid tokenEl or textContent.')
+        return 0
+      }
+      const tokenTextContent = tokenEl.textContent
+
+      if (
+        tokenTextContent === ZWS &&
+        tokenEl.getAttribute('data-token-editable') === 'true'
+      ) {
+        return 0
+      }
+
+      const editableRegion = tokenEl.querySelector(
+        '[data-inlay-editable-region="true"]'
+      ) as HTMLElement | null
+
+      if (editableRegion) {
+        const editableRegionText = editableRegion.textContent || ''
+        if (
+          container === editableRegion ||
+          editableRegion.contains(container)
+        ) {
+          let relativeOffset = 0
+          if (
+            editableRegion.firstChild &&
+            container.nodeType === Node.TEXT_NODE &&
+            editableRegion.contains(container)
+          ) {
+            // Walk from editableRegion.firstChild to container, summing lengths
+            let currentNode: Node | null = editableRegion.firstChild
+            while (currentNode && currentNode !== container) {
+              relativeOffset += (currentNode.textContent || '').length
+              currentNode = currentNode.nextSibling
+            }
+            if (currentNode === container) {
+              // container is found
+              relativeOffset += offsetInContainer
+            } else {
+              // container not found as a direct descendant text node sequence - might be deeper or offsetInContainer is for the editableRegion itself
+              relativeOffset = offsetInContainer
+            }
+          } else if (container === editableRegion) {
+            relativeOffset = offsetInContainer
+          } else {
+            // Fallback if container is not a text node directly or the editableRegion itself
+            // This could happen if there are other wrapper elements inside editableRegion.
+            // A more robust way would be to create a temporary range.
+            // For now, this is a simplification.
+            relativeOffset = offsetInContainer
+          }
+          return Math.min(
+            relativeOffset,
+            editableRegionText.length === 1 && editableRegionText === ZWS
+              ? 0
+              : editableRegionText.length
+          )
+        }
+        // Fallback if selection is somehow outside editable region but within token, use ZWS logic
+        return editableRegionText === ZWS ? 0 : editableRegionText.length
+      }
+
+      // Simple token (no editable region)
+      if (
+        container.nodeType === Node.TEXT_NODE &&
+        tokenEl.contains(container)
+      ) {
+        // Similar logic for simple tokens if they could have multiple text nodes (though less common for 'simple')
+        let relativeOffset = 0
+        let currentNode: Node | null = tokenEl.firstChild
+        while (currentNode && currentNode !== container) {
+          relativeOffset += (currentNode.textContent || '').length
+          currentNode = currentNode.nextSibling
+        }
+        if (currentNode === container) {
+          relativeOffset += offsetInContainer
+        } else {
+          relativeOffset = offsetInContainer
+        }
+        return Math.min(
+          relativeOffset,
+          tokenTextContent.length === 1 && tokenTextContent === ZWS
+            ? 0
+            : tokenTextContent.length
+        )
+      }
+
+      if (container === tokenEl) {
+        // Selection directly on the token span
+        return Math.min(
+          offsetInContainer,
+          tokenTextContent.length === 1 && tokenTextContent === ZWS
+            ? 0
+            : tokenTextContent.length
+        )
+      }
+      // Fallback for simple token if selection is weird
+      return tokenTextContent.length === 1 && tokenTextContent === ZWS
+        ? 0
+        : tokenTextContent.length
+    }
+
     const handleSelectionChange = () => {
       const sel = window.getSelection()
       const expectation = programmaticCursorExpectationRef.current
@@ -52,7 +174,10 @@ export function useSelectionChangeHandler(
         if (programmaticCursorExpectationRef.current) {
           programmaticCursorExpectationRef.current = null
         }
-        if (selectAllStateRef.current !== 'none') {
+        if (
+          typeof selectAllStateRef.current === 'object' &&
+          selectAllStateRef.current.type === 'cross-token'
+        ) {
           console.log(
             '[selectionchange] Focus outside, resetting selectAllStateRef to none.'
           )
@@ -73,7 +198,10 @@ export function useSelectionChangeHandler(
           )
           programmaticCursorExpectationRef.current = null
         }
-        if (selectAllStateRef.current !== 'none') {
+        if (
+          typeof selectAllStateRef.current === 'object' &&
+          selectAllStateRef.current.type === 'cross-token'
+        ) {
           console.log(
             '[selectionchange] Null/Empty selection, resetting selectAllStateRef to none.'
           )
@@ -83,209 +211,394 @@ export function useSelectionChangeHandler(
       }
 
       const range = sel.getRangeAt(0)
-      const container = range.startContainer
+      const {
+        startContainer,
+        startOffset: domStartOffset,
+        endContainer,
+        endOffset: domEndOffset,
+        collapsed
+      } = range
 
-      const tokenEl =
-        container.nodeType === Node.TEXT_NODE
-          ? (container.parentElement?.closest(
-              '[data-token-id]'
-            ) as HTMLElement | null)
-          : (container as HTMLElement)
-
-      if (
-        tokenEl &&
-        mainDivRef.current &&
-        !mainDivRef.current.contains(tokenEl)
-      ) {
-        if (activeTokenRef.current !== null) {
-          activeTokenRef.current = null
-          savedCursorRef.current = null
-          onTokenFocus?.(null)
-          if (selectAllStateRef.current !== 'none') {
-            console.log(
-              '[selectionchange] Focus moved outside tokenbox, resetting selectAllStateRef to none.'
-            )
-            selectAllStateRef.current = 'none'
-          }
-        }
-        if (expectation) {
+      // Clear cross-token selection if the selection is collapsed
+      if (collapsed) {
+        if (
+          typeof selectAllStateRef.current === 'object' &&
+          selectAllStateRef.current.type === 'cross-token'
+        ) {
           console.log(
-            '[selectionchange] Focus moved outside tokenbox, clearing expectation:',
-            expectation
+            '[selectionchange] Selection collapsed, clearing cross-token state from selectAllStateRef.'
           )
-          programmaticCursorExpectationRef.current = null
+          selectAllStateRef.current = 'none'
         }
-        return
       }
 
-      console.log(
-        '[selectionchange] type:',
-        tokenEl?.dataset.tokenId,
-        'container nodeType:',
-        container.nodeType,
-        'expectation:',
-        expectation
-      )
+      const startTokenEl =
+        startContainer.nodeType === Node.TEXT_NODE
+          ? (startContainer.parentElement?.closest(
+              '[data-token-id]'
+            ) as HTMLElement | null)
+          : (startContainer as Element).closest?.('[data-token-id]')
+            ? (startContainer as HTMLElement)
+            : null
 
-      if (tokenEl && tokenEl.hasAttribute('data-token-id')) {
-        const tokenIdStr = tokenEl.getAttribute('data-token-id')!
-        const newActiveIndex = parseInt(tokenIdStr)
-        let finalOffset: number
-        const tokenTextContent = tokenEl.textContent || ''
+      const endTokenEl =
+        endContainer.nodeType === Node.TEXT_NODE
+          ? (endContainer.parentElement?.closest(
+              '[data-token-id]'
+            ) as HTMLElement | null)
+          : (endContainer as Element).closest?.('[data-token-id]')
+            ? (endContainer as HTMLElement)
+            : null
 
+      // Clear cross-token selection from selectAllStateRef if selection is collapsed
+      if (collapsed) {
         if (
-          tokenTextContent === ZWS &&
-          tokenEl.getAttribute('data-token-editable') === 'true'
+          typeof selectAllStateRef.current === 'object' &&
+          selectAllStateRef.current.type === 'cross-token'
         ) {
-          finalOffset = 0
-        } else if (
-          container.nodeType === Node.TEXT_NODE &&
-          tokenEl.contains(container)
-        ) {
-          finalOffset = range.startOffset
-        } else if (container === tokenEl) {
-          finalOffset = tokenTextContent.length
-        } else {
-          finalOffset = tokenTextContent.length
+          console.log(
+            '[selectionchange] Selection collapsed, clearing cross-token state from selectAllStateRef.'
+          )
+          selectAllStateRef.current = 'none'
         }
+      }
 
-        console.log(
-          '[selectionchange] Token selected. ID:',
-          newActiveIndex,
-          'DOM Offset:',
-          finalOffset,
-          'Current savedCursor:',
-          savedCursorRef.current,
-          'Current expectation:',
-          expectation
-        )
+      if (
+        startTokenEl &&
+        endTokenEl &&
+        mainDivRef.current &&
+        mainDivRef.current.contains(startTokenEl) &&
+        mainDivRef.current.contains(endTokenEl) &&
+        !collapsed // Selection must not be collapsed for cross-token
+      ) {
+        if (startTokenEl !== endTokenEl) {
+          // Critical condition for cross-token
+          const startTokenIdStr = startTokenEl.getAttribute('data-token-id')
+          const endTokenIdStr = endTokenEl.getAttribute('data-token-id')
 
-        if (expectation && expectation.index === newActiveIndex) {
-          if (expectation.offset === finalOffset) {
-            console.log(
-              '[selectionchange] Expectation MET for token',
-              newActiveIndex,
-              'at offset',
-              finalOffset
-            )
-            if (
-              savedCursorRef.current?.index !== newActiveIndex ||
-              savedCursorRef.current?.offset !== finalOffset
-            ) {
-              savedCursorRef.current = {
-                index: newActiveIndex,
-                offset: finalOffset
-              }
-            }
-            programmaticCursorExpectationRef.current = null
-          } else {
-            console.warn(
-              '[selectionchange] Expectation MISMATCH for token',
-              newActiveIndex,
-              '. Expected offset:',
-              expectation.offset,
-              'Actual DOM offset:',
-              finalOffset,
-              'Not updating savedCursor. Letting useLayoutEffect reconcile.'
-            )
-            return
-          }
-        } else {
-          if (expectation) {
-            console.log(
-              '[selectionchange] Expectation existed for token ID',
-              expectation.index,
-              '(offset:',
-              expectation.offset,
-              ')',
-              'but current selection is on token ID',
-              newActiveIndex,
-              '(DOM offset:',
-              finalOffset,
-              '). Ignoring this selectionchange event and letting useLayoutEffect attempt to fulfill the original expectation.'
-            )
-            return
-          }
+          if (startTokenIdStr && endTokenIdStr) {
+            const startIdx = parseInt(startTokenIdStr)
+            const endIdx = parseInt(endTokenIdStr)
 
-          const currentSaved = savedCursorRef.current
-          if (!currentSaved || currentSaved.index !== newActiveIndex) {
-            console.log(
-              '[selectionchange] No/Diff Expectation: Selection on new/different token or from null. Updating savedCursor. From:',
-              currentSaved,
-              'To:',
-              { index: newActiveIndex, offset: finalOffset }
-            )
-            savedCursorRef.current = {
-              index: newActiveIndex,
-              offset: finalOffset
-            }
-          } else {
-            console.log(
-              '[selectionchange] No/Diff Expectation: Selection on same token index',
-              newActiveIndex,
-              '. savedCursor.offset:',
-              currentSaved.offset,
-              'DOM reports offset:',
-              finalOffset,
-              '. NOT updating savedCursor.offset.'
-            )
-            if (
-              savedCursorRef.current === null &&
-              typeof newActiveIndex === 'number'
-            ) {
+            let finalStartTokenEl = startTokenEl
+            let finalEndTokenEl = endTokenEl
+            let finalStartIdx = startIdx
+            let finalEndIdx = endIdx
+            let finalStartContainerForOffset = startContainer
+            let finalStartOffsetForOffset = domStartOffset
+            let finalEndContainerForOffset = endContainer
+            let finalEndOffsetForOffset = domEndOffset
+
+            // Determine logical start and end based on document order
+            const comparison =
+              finalStartTokenEl.compareDocumentPosition(finalEndTokenEl)
+            if (comparison & Node.DOCUMENT_POSITION_PRECEDING) {
+              // startTokenEl is after endTokenEl (backward selection)
+              finalStartTokenEl = endTokenEl
+              finalEndTokenEl = startTokenEl
+              finalStartIdx = endIdx
+              finalEndIdx = startIdx
+              finalStartContainerForOffset = endContainer
+              finalStartOffsetForOffset = domEndOffset
+              finalEndContainerForOffset = startContainer
+              finalEndOffsetForOffset = domStartOffset
+            } else if (!(comparison & Node.DOCUMENT_POSITION_FOLLOWING)) {
+              // Not following and not preceding implies same node or error, but we check startTokenEl !== endTokenEl
+              // This case should ideally not be hit if tokens are distinct.
               console.warn(
-                '[selectionchange] savedCursor was null but selection is on same token index. This is unexpected. Setting savedCursor offset to DOM offset as a fallback.'
+                '[selectionchange] Unexpected document position for distinct tokens.'
               )
-              savedCursorRef.current = {
-                index: newActiveIndex,
-                offset: finalOffset
-              }
+              if (
+                typeof selectAllStateRef.current === 'object' &&
+                selectAllStateRef.current.type === 'cross-token'
+              )
+                selectAllStateRef.current = 'none'
+              // Fall through to single token logic by not returning
             }
-          }
-        }
 
-        const oldActiveToken = activeTokenRef.current
-        if (oldActiveToken !== tokenEl) {
-          activeTokenRef.current = tokenEl
-          onTokenFocus?.(newActiveIndex)
-          if (selectAllStateRef.current === 'token') {
+            const startOffsetInToken = getOffsetInToken(
+              finalStartTokenEl,
+              finalStartContainerForOffset,
+              finalStartOffsetForOffset
+            )
+            const endOffsetInToken = getOffsetInToken(
+              finalEndTokenEl,
+              finalEndContainerForOffset,
+              finalEndOffsetForOffset
+            )
+
+            selectAllStateRef.current = {
+              type: 'cross-token',
+              startTokenIndex: finalStartIdx,
+              startOffset: startOffsetInToken,
+              endTokenIndex: finalEndIdx,
+              endOffset: endOffsetInToken
+            }
+            // Consider a new state for selectAllStateRef, e.g., 'cross-token'
+            // For now, using 'all' might be okay for deletion, but 'cross-token' would be more accurate.
+            // selectAllStateRef.current = 'all' // Or 'cross-token'
+            if (activeTokenRef.current) {
+              // Clear single active token state
+              activeTokenRef.current = null
+              onTokenFocus?.(null)
+            }
+            if (savedCursorRef.current) savedCursorRef.current = null
+            if (programmaticCursorExpectationRef.current)
+              programmaticCursorExpectationRef.current = null
+
             console.log(
-              '[selectionchange] Active token changed, resetting selectAllStateRef from token to none.'
+              '[selectionchange] Cross-token selection DETECTED/UPDATED in selectAllStateRef:',
+              JSON.stringify(selectAllStateRef.current)
+            )
+            return // Handled cross-token selection
+          }
+        } else {
+          // startTokenEl === endTokenEl, but selection is not collapsed
+          // This is a selection within a single token. Clear any previous cross-token state.
+          if (
+            typeof selectAllStateRef.current === 'object' &&
+            selectAllStateRef.current.type === 'cross-token'
+          ) {
+            console.log(
+              '[selectionchange] Selection is within a single token, clearing cross-token state from selectAllStateRef.'
             )
             selectAllStateRef.current = 'none'
           }
         }
       } else {
-        console.log('[selectionchange] Selection not on a token.')
-        if (expectation) {
+        // Selection is not on any token, or is on a single token and collapsed,
+        // or one of the tokens is not valid/within inlay.
+        // Clear cross-token selection from selectAllStateRef if it was previously set.
+        if (
+          typeof selectAllStateRef.current === 'object' &&
+          selectAllStateRef.current.type === 'cross-token'
+        ) {
           console.log(
-            '[selectionchange] Selection not on token, clearing expectation for token',
-            expectation.index,
-            expectation
+            '[selectionchange] Selection no longer valid for cross-token, clearing from selectAllStateRef.'
           )
-          programmaticCursorExpectationRef.current = null
+          selectAllStateRef.current = 'none'
+        }
+      }
+
+      // Original single token selection logic (proceed if not a cross-token selection)
+      // This part should only run if selectAllStateRef.current is not a cross-token object
+      if (
+        typeof selectAllStateRef.current !== 'object' ||
+        selectAllStateRef.current.type !== 'cross-token'
+      ) {
+        const currentActiveTokenEl =
+          startContainer.nodeType === Node.TEXT_NODE
+            ? (startContainer.parentElement?.closest(
+                '[data-token-id]'
+              ) as HTMLElement | null)
+            : // If startContainer is an element, check if IT is the token, then try closest.
+              startContainer instanceof HTMLElement &&
+                startContainer.hasAttribute('data-token-id')
+              ? startContainer
+              : ((startContainer as Element).closest?.(
+                  '[data-token-id]'
+                ) as HTMLElement | null)
+
+        if (
+          currentActiveTokenEl &&
+          mainDivRef.current &&
+          !mainDivRef.current.contains(currentActiveTokenEl)
+        ) {
+          console.log(
+            '[selectionchange] Focus moved outside tokenbox, resetting selectAllStateRef to none.'
+          )
+          selectAllStateRef.current = 'none'
+          if (activeTokenRef.current !== null) {
+            activeTokenRef.current = null
+            onTokenFocus?.(null)
+          }
+          if (savedCursorRef.current) {
+            savedCursorRef.current = null
+          }
+          if (programmaticCursorExpectationRef.current) {
+            programmaticCursorExpectationRef.current = null
+          }
+          return
         }
 
-        if (activeTokenRef.current !== null) {
-          activeTokenRef.current = null
-          onTokenFocus?.(null)
-          if (selectAllStateRef.current === 'token') {
-            console.log(
-              '[selectionchange] Selection no longer on a token, resetting selectAllStateRef from token to none.'
-            )
-            selectAllStateRef.current = 'none'
-          }
-        }
+        console.log(
+          '[selectionchange] type:',
+          currentActiveTokenEl?.dataset.tokenId,
+          'container nodeType:',
+          startContainer.nodeType,
+          'expectation:',
+          expectation
+        )
+
         if (
-          mainDivRef.current &&
-          document.activeElement &&
-          mainDivRef.current.contains(document.activeElement)
+          currentActiveTokenEl &&
+          currentActiveTokenEl.hasAttribute('data-token-id')
         ) {
-          if (savedCursorRef.current !== null) {
+          const tokenIdStr = currentActiveTokenEl.getAttribute('data-token-id')!
+          const newActiveIndex = parseInt(tokenIdStr)
+          let finalOffset: number
+          const tokenTextContent = currentActiveTokenEl.textContent || ''
+
+          if (
+            tokenTextContent === ZWS &&
+            currentActiveTokenEl.getAttribute('data-token-editable') === 'true'
+          ) {
+            finalOffset = 0
+          } else if (
+            startContainer.nodeType === Node.TEXT_NODE &&
+            currentActiveTokenEl.contains(startContainer)
+          ) {
+            finalOffset = domStartOffset
+          } else if (startContainer === currentActiveTokenEl) {
+            finalOffset = tokenTextContent.length
+          } else {
+            finalOffset = tokenTextContent.length
+          }
+
+          console.log(
+            '[selectionchange] Token selected. ID:',
+            newActiveIndex,
+            'DOM Offset:',
+            finalOffset,
+            'Current savedCursor:',
+            savedCursorRef.current,
+            'Current expectation:',
+            expectation
+          )
+
+          if (expectation && expectation.index === newActiveIndex) {
+            if (expectation.offset === finalOffset) {
+              console.log(
+                '[selectionchange] Expectation MET for token',
+                newActiveIndex,
+                'at offset',
+                finalOffset
+              )
+              if (
+                savedCursorRef.current?.index !== newActiveIndex ||
+                savedCursorRef.current?.offset !== finalOffset
+              ) {
+                savedCursorRef.current = {
+                  index: newActiveIndex,
+                  offset: finalOffset
+                }
+              }
+              programmaticCursorExpectationRef.current = null
+            } else {
+              console.warn(
+                '[selectionchange] Expectation MISMATCH for token',
+                newActiveIndex,
+                '. Expected offset:',
+                expectation.offset,
+                'Actual DOM offset:',
+                finalOffset,
+                'Not updating savedCursor. Letting useLayoutEffect reconcile.'
+              )
+              return
+            }
+          } else {
+            if (expectation) {
+              console.log(
+                '[selectionchange] Expectation existed for token ID',
+                expectation.index,
+                '(offset:',
+                expectation.offset,
+                ')',
+                'but current selection is on token ID',
+                newActiveIndex,
+                '(DOM offset:',
+                finalOffset,
+                '). Ignoring this selectionchange event and letting useLayoutEffect attempt to fulfill the original expectation.'
+              )
+              return
+            }
+
+            const currentSaved = savedCursorRef.current
+            if (!currentSaved || currentSaved.index !== newActiveIndex) {
+              console.log(
+                '[selectionchange] No/Diff Expectation: Selection on new/different token or from null. Updating savedCursor. From:',
+                currentSaved,
+                'To:',
+                { index: newActiveIndex, offset: finalOffset }
+              )
+              savedCursorRef.current = {
+                index: newActiveIndex,
+                offset: finalOffset
+              }
+            } else {
+              console.log(
+                '[selectionchange] No/Diff Expectation: Selection on same token index',
+                newActiveIndex,
+                '. savedCursor.offset:',
+                currentSaved.offset,
+                'DOM reports offset:',
+                finalOffset,
+                '. NOT updating savedCursor.offset.'
+              )
+              if (
+                savedCursorRef.current === null &&
+                typeof newActiveIndex === 'number'
+              ) {
+                console.warn(
+                  '[selectionchange] savedCursor was null but selection is on same token index. This is unexpected. Setting savedCursor offset to DOM offset as a fallback.'
+                )
+                savedCursorRef.current = {
+                  index: newActiveIndex,
+                  offset: finalOffset
+                }
+              }
+            }
+          }
+
+          const oldActiveToken = activeTokenRef.current
+          if (oldActiveToken !== currentActiveTokenEl) {
+            activeTokenRef.current = currentActiveTokenEl
+            onTokenFocus?.(newActiveIndex)
+            if (
+              typeof selectAllStateRef.current === 'object' &&
+              selectAllStateRef.current.type === 'cross-token'
+            ) {
+              console.log(
+                '[selectionchange] Active token changed, resetting selectAllStateRef from cross-token to none.'
+              )
+              selectAllStateRef.current = 'none'
+            }
+          }
+        } else {
+          console.log('[selectionchange] Selection not on a token.')
+          if (expectation) {
             console.log(
-              '[selectionchange] Selection in root. Clearing savedCursor.'
+              '[selectionchange] Selection not on token, clearing expectation for token',
+              expectation.index,
+              expectation
             )
-            savedCursorRef.current = null
+            programmaticCursorExpectationRef.current = null
+          }
+
+          if (activeTokenRef.current !== null) {
+            activeTokenRef.current = null
+            onTokenFocus?.(null)
+            if (
+              typeof selectAllStateRef.current === 'object' &&
+              selectAllStateRef.current.type === 'cross-token'
+            ) {
+              console.log(
+                '[selectionchange] Selection no longer on a token, resetting selectAllStateRef from cross-token to none.'
+              )
+              selectAllStateRef.current = 'none'
+            }
+          }
+          if (
+            mainDivRef.current &&
+            document.activeElement &&
+            mainDivRef.current.contains(document.activeElement)
+          ) {
+            if (savedCursorRef.current !== null) {
+              console.log(
+                '[selectionchange] Selection in root. Clearing savedCursor.'
+              )
+              savedCursorRef.current = null
+            }
           }
         }
       }

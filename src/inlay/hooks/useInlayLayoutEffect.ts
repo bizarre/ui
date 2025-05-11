@@ -18,6 +18,7 @@ export interface UseInlayLayoutEffectProps<T> {
   } | null>
   domKeyRef: React.RefObject<number> // Assuming it's a RefObject based on usage
   prevDomKeyValueRef: React.MutableRefObject<number> // Assuming MutableRefObject
+  forceImmediateRestoreRef: React.MutableRefObject<boolean> // Added prop type
 }
 
 export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
@@ -30,7 +31,8 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
     savedCursorRef,
     programmaticCursorExpectationRef,
     domKeyRef,
-    prevDomKeyValueRef
+    prevDomKeyValueRef,
+    forceImmediateRestoreRef // Destructure here
   } = props
 
   React.useLayoutEffect(() => {
@@ -47,6 +49,8 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
       savedCursorRef.current,
       'activeTokenRef:',
       activeTokenRef.current?.dataset.tokenId,
+      'forceImmediateRestoreRef:',
+      forceImmediateRestoreRef.current, // Log the ref value
       'document.activeElement BEFORE any logic:',
       document.activeElement === mainDivRef.current
         ? 'main_div'
@@ -185,7 +189,24 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
         document.activeElement === mainDivRef.current &&
         (activeIdx === null || activeIdx !== saved.index)
 
-      if (needsDoubleRAF) {
+      if (forceImmediateRestoreRef.current) {
+        console.log(
+          `[useLayoutEffect #${currentDomKey}] Prioritizing forceImmediateRestoreRef. Scheduling single rAF.`
+        )
+        forceImmediateRestoreRef.current = false // Reset the flag
+        requestAnimationFrame(() => {
+          console.log(
+            `[useLayoutEffect #${currentDomKey} rAF_IMMEDIATE] Running. Querying for token: ${targetTokenId}. activeElement BEFORE: ${document.activeElement?.tagName}`
+          )
+          const tokenElementInRAF = mainDivRef.current?.querySelector(
+            `[data-token-id="${targetTokenId}"]`
+          ) as HTMLElement | null
+          executeFocusLogic(tokenElementInRAF)
+          console.log(
+            `[useLayoutEffect #${currentDomKey} rAF_IMMEDIATE] END. activeElement AFTER executeFocusLogic: ${document.activeElement?.tagName}`
+          )
+        })
+      } else if (needsDoubleRAF) {
         console.log(
           `[useLayoutEffect #${currentDomKey}] Needs double rAF (new token focus?). Scheduling query and focus/restore in double rAF.`
         )
@@ -205,7 +226,7 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
         })
       } else {
         console.log(
-          `[useLayoutEffect #${currentDomKey}] Needs single rAF (domWasReKeyed: ${domWasReKeyed}). Scheduling query and focus/restore in single rAF.`
+          `[useLayoutEffect #${currentDomKey}] Needs single rAF (domWasReKeyed: ${domWasReKeyed}, or other conditions not met for double). Scheduling query and focus/restore in single rAF.`
         )
         requestAnimationFrame(() => {
           console.log(
@@ -276,6 +297,7 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
     savedCursorRef,
     programmaticCursorExpectationRef,
     domKeyRef,
-    prevDomKeyValueRef
+    prevDomKeyValueRef,
+    forceImmediateRestoreRef
   ])
 }

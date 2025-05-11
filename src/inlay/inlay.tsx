@@ -14,7 +14,11 @@ import { useBeforeInputHandler } from './hooks/useBeforeInputHandler'
 import { useKeydownHandler } from './hooks/useKeydownHandler'
 import { processRootText } from './utils/process-root-text'
 import { useInlayLayoutEffect } from './hooks/useInlayLayoutEffect'
-import { useSelectionChangeHandler } from './hooks/useSelectionChangeHandler'
+import {
+  useSelectionChangeHandler,
+  type SelectAllState
+} from './hooks/useSelectionChangeHandler'
+import { useMemoizedCallback } from './hooks/useMemoizedCallback'
 
 const [createInlayContext] = createContextScope(COMPONENT_NAME)
 
@@ -42,15 +46,31 @@ const _Inlay = <T,>(
   }: ScopedProps<InlayProps<T>>,
   forwardedRef: React.Ref<HTMLElement>
 ) => {
+  const memoizedOnTokenFocus = useMemoizedCallback(onTokenFocus)
+  const memoizedOnTokensChange = useMemoizedCallback(onTokensChange)
+  const memoizedParseToken = useMemoizedCallback(parseToken)
+  const memoizedOnTokenChange = useMemoizedCallback(onTokenChange)
+  const memoizedOnCharInput = useMemoizedCallback(onCharInput)
+  const memoizedDisplayCommitCharSpacer =
+    typeof displayCommitCharSpacer === 'function'
+      ? useMemoizedCallback(
+          displayCommitCharSpacer as (
+            commitChar: string,
+            afterTokenIndex: number
+          ) => React.ReactNode
+        )
+      : displayCommitCharSpacer
+
   const ref = React.useRef<HTMLDivElement>(null)
   const activeTokenRef = React.useRef<HTMLElement | null>(null)
   const domKeyRef = React.useRef(0)
   const prevDomKeyValueRef = React.useRef(domKeyRef.current)
-  const selectAllStateRef = React.useRef<'none' | 'token' | 'all'>('none')
+  const selectAllStateRef = React.useRef<SelectAllState>('none')
   const programmaticCursorExpectationRef = React.useRef<{
     index: number
     offset: number
   } | null>(null)
+  const forceImmediateRestoreRef = React.useRef(false)
   const [spacerChars, setSpacerChars] = React.useState<(string | null)[]>([])
 
   // For EditableText integration: Map of tokenIndex -> string value
@@ -88,7 +108,7 @@ const _Inlay = <T,>(
   const [tokens, setTokens] = useControllableState({
     prop: tokensProp,
     defaultProp: defaultTokens ?? [],
-    onChange: onTokensChange
+    onChange: memoizedOnTokensChange
   })
 
   console.log(
@@ -101,10 +121,10 @@ const _Inlay = <T,>(
   // Define renderSpacer function based on the prop
   const renderSpacer = React.useCallback(
     (commitChar: string, afterTokenIndex: number): React.ReactNode => {
-      if (typeof displayCommitCharSpacer === 'function') {
-        return displayCommitCharSpacer(commitChar, afterTokenIndex)
+      if (typeof memoizedDisplayCommitCharSpacer === 'function') {
+        return memoizedDisplayCommitCharSpacer(commitChar, afterTokenIndex)
       }
-      if (displayCommitCharSpacer === true) {
+      if (memoizedDisplayCommitCharSpacer === true) {
         return (
           <span
             contentEditable="false"
@@ -117,7 +137,7 @@ const _Inlay = <T,>(
       }
       return null // If displayCommitCharSpacer is false or undefined
     },
-    [displayCommitCharSpacer]
+    [memoizedDisplayCommitCharSpacer]
   )
 
   // Effect to keep spacerCharsListRef in sync with tokens length
@@ -135,7 +155,7 @@ const _Inlay = <T,>(
   useSelectionChangeHandler({
     mainDivRef: ref,
     activeTokenRef,
-    onTokenFocus,
+    onTokenFocus: memoizedOnTokenFocus,
     savedCursorRef,
     programmaticCursorExpectationRef,
     selectAllStateRef
@@ -553,7 +573,7 @@ const _Inlay = <T,>(
           if (index > 0) {
             nextCursorIndex = index - 1
           } else {
-            nextCursorIndex = 0 // Was 0, should remain 0 if first token is removed and others exist
+            nextCursorIndex = 0
           }
         } else {
           nextCursorIndex = null
@@ -604,23 +624,27 @@ const _Inlay = <T,>(
           savedCursorRef.current = {
             index: nextCursorIndex,
             offset: getTokenStringForOffset(
-              tokens[nextCursorIndex],
+              newTokens[nextCursorIndex], // Used newTokens
               nextCursorIndex
             ).length
           }
+          programmaticCursorExpectationRef.current = savedCursorRef.current // Added
         } else if (newTokens.length === 0) {
           savedCursorRef.current = null
+          programmaticCursorExpectationRef.current = null // Added
         } else if (
           newTokens.length > 0 &&
           (nextCursorIndex === null || nextCursorIndex >= newTokens.length)
         ) {
+          const lastIdx = newTokens.length - 1
           savedCursorRef.current = {
-            index: newTokens.length - 1,
+            index: lastIdx,
             offset: getTokenStringForOffset(
-              newTokens[newTokens.length - 1],
-              newTokens.length - 1
+              newTokens[lastIdx], // Already using newTokens here, which is good
+              lastIdx
             ).length
           }
+          programmaticCursorExpectationRef.current = savedCursorRef.current // Added
         }
 
         if (JSON.stringify(newTokens) !== JSON.stringify(prev)) {
@@ -629,26 +653,36 @@ const _Inlay = <T,>(
         return newTokens
       })
     },
-    [tokens, onTokenFocus, setTokens, spacerChars, setSpacerChars]
+    [
+      tokens,
+      onTokenFocus,
+      setTokens,
+      spacerChars,
+      setSpacerChars,
+      _getEditableTextValue, // Added _getEditableTextValue to dependencies
+      activeTokenRef, // Added activeTokenRef
+      programmaticCursorExpectationRef // Added programmaticCursorExpectationRef
+    ]
   )
 
   useInlayLayoutEffect<T>({
     tokens,
     restoreCursor,
-    mainDivRef: ref, // Pass the main div ref
+    mainDivRef: ref,
     activeTokenRef,
-    onTokenFocus,
+    onTokenFocus: memoizedOnTokenFocus,
     savedCursorRef,
     programmaticCursorExpectationRef,
     domKeyRef,
-    prevDomKeyValueRef
+    prevDomKeyValueRef,
+    forceImmediateRestoreRef
   })
 
   // Call the useBeforeInputHandler hook
   const onBeforeInputEventHanlder = useBeforeInputHandler<T>({
     tokens,
     activeTokenRef,
-    parseToken, // This is parseToken from _Inlay's props
+    parseToken: memoizedParseToken,
     setTokens,
     savedCursorRef,
     mainDivRef: ref,
@@ -668,17 +702,18 @@ const _Inlay = <T,>(
     programmaticCursorExpectationRef,
     mainDivRef: ref,
     selectAllStateRef,
-    parseToken, // from _Inlay props
-    removeToken: removeTokenScoped, // Use the scoped removeToken
-    saveCursor, // from _Inlay scope
-    onTokenFocus, // from _Inlay props
-    onCharInput, // from _Inlay props
-    commitOnChars, // from _Inlay props
-    defaultNewTokenValue, // from _Inlay props
-    addNewTokenOnCommit, // from _Inlay props (already has default)
-    insertSpacerOnCommit, // from _Inlay props (already has default)
-    displayCommitCharSpacer, // from _Inlay props
-    _getEditableTextValue // Pass down from _Inlay context functions
+    parseToken: memoizedParseToken,
+    removeToken: removeTokenScoped,
+    saveCursor,
+    onTokenFocus: memoizedOnTokenFocus,
+    onCharInput: memoizedOnCharInput,
+    commitOnChars,
+    defaultNewTokenValue,
+    addNewTokenOnCommit,
+    insertSpacerOnCommit,
+    displayCommitCharSpacer: memoizedDisplayCommitCharSpacer,
+    _getEditableTextValue,
+    forceImmediateRestoreRef
   })
 
   const Comp = asChild ? Slot : 'div'
@@ -686,19 +721,19 @@ const _Inlay = <T,>(
   return (
     <InlayProvider
       scope={__scope}
-      onTokenChange={onTokenChange as any}
+      onTokenChange={memoizedOnTokenChange as any}
       activeTokenRef={activeTokenRef}
       tokens={tokens as any}
       onInput={onDivInput}
       updateToken={updateToken as any}
-      parseToken={parseToken as any}
+      parseToken={memoizedParseToken as any}
       removeToken={removeTokenScoped as any}
       restoreCursor={restoreCursor}
       saveCursor={saveCursor}
       spacerChars={spacerChars}
-      displayCommitCharSpacer={displayCommitCharSpacer}
+      displayCommitCharSpacer={memoizedDisplayCommitCharSpacer}
       renderSpacer={renderSpacer}
-      onCharInput={onCharInput as any}
+      onCharInput={memoizedOnCharInput as any}
       _registerEditableTextValue={_registerEditableTextValue}
       _getEditableTextValue={_getEditableTextValue}
     >
@@ -787,17 +822,17 @@ const InlayToken = React.forwardRef<
 
 InlayToken.displayName = 'InlayToken'
 
-type TokenEditableTextProps = {
+type InlayTokenEditableText = {
   value?: string
   index: number
 } & Omit<React.HTMLAttributes<HTMLElement>, 'onChange' | 'onFocus' | 'onInput'>
 
-const EditableText = ({
+const InlayTokenEditableText = ({
   value,
   index,
   __scope,
   ...props
-}: ScopedProps<TokenEditableTextProps>) => {
+}: ScopedProps<InlayTokenEditableText>) => {
   const { _registerEditableTextValue } = useInlayContext(
     COMPONENT_NAME,
     __scope
@@ -828,7 +863,7 @@ const EditableText = ({
     </span>
   )
 }
-EditableText.displayName = 'InlayEditableText'
+InlayTokenEditableText.displayName = 'InlayTokenEditableText'
 
 export function createInlay<T>() {
   const Root = React.forwardRef(_Inlay<T>)
@@ -837,14 +872,10 @@ export function createInlay<T>() {
     Token: InlayToken as React.ForwardRefExoticComponent<
       InlayTokenProps & React.RefAttributes<HTMLDivElement>
     >,
-    EditableText,
+    EditableText: InlayTokenEditableText,
     __type: null as unknown as T
   } as const
 }
 export type InferInlay<T> = T extends { __type: infer U } ? U : never
 
-export const {
-  Root,
-  Token,
-  EditableText: InlayEditableText
-} = createInlay<string>()
+export const { Root, Token, EditableText } = createInlay<string>()

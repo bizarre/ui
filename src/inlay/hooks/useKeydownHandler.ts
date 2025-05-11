@@ -8,6 +8,7 @@ import type {
   OnInputGlobalActions,
   TokenHandle
 } from '../inlay.types'
+import type { SelectAllState } from './useSelectionChangeHandler' // Import SelectAllState
 
 // Re-import OnInputContext specifically if needed for the onCharInput prop type directly
 import type { OnInputContext } from '../inlay.types'
@@ -27,7 +28,7 @@ export type UseKeydownHandlerProps<T> = {
     offset: number
   } | null>
   mainDivRef: React.RefObject<HTMLDivElement | null> // ref from _Inlay
-  selectAllStateRef: React.MutableRefObject<'none' | 'token' | 'all'>
+  selectAllStateRef: React.MutableRefObject<SelectAllState> // Use SelectAllState here
 
   // Callbacks from _Inlay or its props
   parseToken: (value: string) => T | null
@@ -45,6 +46,7 @@ export type UseKeydownHandlerProps<T> = {
 
   // For retrieving EditableText values
   _getEditableTextValue: (index: number) => string | undefined
+  forceImmediateRestoreRef: React.MutableRefObject<boolean>
 }
 
 export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
@@ -68,7 +70,8 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
     addNewTokenOnCommit,
     insertSpacerOnCommit,
     displayCommitCharSpacer,
-    _getEditableTextValue
+    _getEditableTextValue,
+    forceImmediateRestoreRef
   } = props
 
   // Helper function to get the meaningful string representation of a token
@@ -103,9 +106,254 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
   const handleRemoveTokenOnKeyDownInternal = React.useCallback(
     (
       e: React.KeyboardEvent<HTMLDivElement>,
-      selectAllState: 'none' | 'token' | 'all'
+      selectAllState: SelectAllState
     ) => {
       if (e.key !== 'Backspace' && e.key !== 'Delete') return
+      console.log('[KeydownHandler] handleRemoveTokenOnKeyDownInternal ENTRY', {
+        key: e.key,
+        selectAllState
+      })
+
+      // Handle cross-token selection deletion first
+      if (
+        typeof selectAllState === 'object' &&
+        selectAllState.type === 'cross-token'
+      ) {
+        console.log(
+          '[KeydownHandler] Cross-token deletion triggered',
+          selectAllState
+        )
+        e.preventDefault()
+        const { startTokenIndex, startOffset, endTokenIndex, endOffset } =
+          selectAllState
+        console.log('[KeydownHandler] Cross-token details:', {
+          startTokenIndex,
+          startOffset,
+          endTokenIndex,
+          endOffset
+        })
+
+        const currentTokensForLog = [...tokens] // Log a snapshot
+        console.log(
+          '[KeydownHandler] Current tokens state (snapshot):',
+          JSON.stringify(currentTokensForLog)
+        )
+        console.log(
+          '[KeydownHandler] Current spacerChars state (snapshot):',
+          JSON.stringify(spacerChars)
+        )
+
+        const startTokenValue =
+          startTokenIndex < tokens.length ? tokens[startTokenIndex] : undefined
+        const endTokenValue =
+          endTokenIndex < tokens.length ? tokens[endTokenIndex] : undefined
+        console.log('[KeydownHandler] Raw start/end token values:', {
+          startTokenValue,
+          endTokenValue
+        })
+
+        const textFromStartToken =
+          startTokenIndex < tokens.length
+            ? getActualTextForToken(tokens[startTokenIndex], startTokenIndex)
+            : ''
+        const textFromEndToken =
+          endTokenIndex < tokens.length
+            ? getActualTextForToken(tokens[endTokenIndex], endTokenIndex)
+            : ''
+        console.log('[KeydownHandler] Text from getActualTextForToken:', {
+          textFromStartToken,
+          textFromEndToken
+        })
+
+        const textBeforeSelection =
+          startTokenIndex < tokens.length
+            ? textFromStartToken.slice(0, startOffset)
+            : ''
+        const textAfterSelection =
+          endTokenIndex < tokens.length ? textFromEndToken.slice(endOffset) : ''
+        console.log('[KeydownHandler] Sliced text:', {
+          textBeforeSelection,
+          textAfterSelection
+        })
+
+        const mergedText = textBeforeSelection + textAfterSelection
+        console.log('[KeydownHandler] Merged text for parsing:', mergedText)
+        const newParsedToken = parseToken(mergedText)
+        console.log('[KeydownHandler] Parsed new token:', newParsedToken)
+
+        const newTokens: T[] = []
+        const newSpacerCharsInternal: (string | null)[] = []
+
+        console.log(
+          '[KeydownHandler] Processing tokens BEFORE selection start (up to index',
+          startTokenIndex - 1,
+          '):'
+        )
+        // Add tokens before the selection
+        for (let i = 0; i < startTokenIndex; i++) {
+          if (i < tokens.length) {
+            newTokens.push(tokens[i])
+            newSpacerCharsInternal.push(
+              i < spacerChars.length ? spacerChars[i] : null
+            )
+            console.log(
+              `[KeydownHandler] Loop BEFORE: Added token ${i}:`,
+              tokens[i],
+              'Spacer:',
+              spacerChars[i]
+            )
+          }
+        }
+
+        let cursorIndexAfterDelete = startTokenIndex
+        let cursorOffsetAfterDelete = textBeforeSelection.length
+        console.log('[KeydownHandler] Initial cursor intent:', {
+          cursorIndexAfterDelete,
+          cursorOffsetAfterDelete
+        })
+
+        if (newParsedToken !== null) {
+          newTokens.push(newParsedToken)
+          const spacerForNewToken =
+            endTokenIndex < spacerChars.length
+              ? spacerChars[endTokenIndex]
+              : null
+          newSpacerCharsInternal.push(spacerForNewToken)
+          console.log(
+            '[KeydownHandler] newParsedToken is NOT null. Added to newTokens. Chosen spacer:',
+            spacerForNewToken,
+            'New cursor intent (remains based on textBeforeSelection for now):',
+            { cursorIndexAfterDelete, cursorOffsetAfterDelete }
+          )
+        } else {
+          console.log('[KeydownHandler] newParsedToken IS null.')
+          // No new token formed (e.g. mergedText was empty and parseToken returned null)
+          // The cursor should effectively be at the end of content before selection start.
+          // If startTokenIndex is 0 and textBeforeSelection is empty, newTokens might be empty.
+          // If newTokens is not empty, cursor can be at end of last token before selection point.
+          if (newTokens.length > 0) {
+            cursorIndexAfterDelete = newTokens.length - 1
+            cursorOffsetAfterDelete = getActualTextForToken(
+              newTokens[newTokens.length - 1],
+              newTokens.length - 1
+            ).length
+            console.log(
+              '[KeydownHandler] newParsedToken null, newTokens has content. Cursor to end of last pre-selection token:',
+              { cursorIndexAfterDelete, cursorOffsetAfterDelete }
+            )
+          } else {
+            // All content up to selection start was deleted, and nothing new formed.
+            // This implies the Inlay becomes empty or cursor is at start of what was after selection.
+            cursorIndexAfterDelete = 0 // Will be adjusted if tokens from after selection are added
+            cursorOffsetAfterDelete = 0
+            console.log(
+              '[KeydownHandler] newParsedToken null, newTokens empty. Cursor to 0,0 (may adjust):',
+              { cursorIndexAfterDelete, cursorOffsetAfterDelete }
+            )
+          }
+        }
+
+        // Add tokens after the selection
+        const firstIndexAfterSelection = newTokens.length
+        console.log(
+          '[KeydownHandler] Processing tokens AFTER selection end (from index',
+          endTokenIndex + 1,
+          'onwards). firstIndexAfterSelection for cursor adjustment:',
+          firstIndexAfterSelection
+        )
+        for (let i = endTokenIndex + 1; i < tokens.length; i++) {
+          newTokens.push(tokens[i])
+          newSpacerCharsInternal.push(
+            i < spacerChars.length ? spacerChars[i] : null
+          )
+          console.log(
+            `[KeydownHandler] Loop AFTER: Added token ${i} (original index):`,
+            tokens[i],
+            'Spacer:',
+            spacerChars[i]
+          )
+        }
+
+        if (
+          newParsedToken === null &&
+          newTokens.length > 0 &&
+          firstIndexAfterSelection < newTokens.length
+        ) {
+          // If no new token was formed from merge, and tokens from after the selection were added,
+          // place cursor at the start of the first of those tokens.
+          cursorIndexAfterDelete = firstIndexAfterSelection
+          cursorOffsetAfterDelete = 0
+          console.log(
+            '[KeydownHandler] Cursor ADJUSTED (no new token, post-selection tokens exist):',
+            { cursorIndexAfterDelete, cursorOffsetAfterDelete }
+          )
+        } else if (newParsedToken === null && newTokens.length === 0) {
+          // Everything deleted, inlay is empty
+          cursorIndexAfterDelete = 0
+          cursorOffsetAfterDelete = 0
+          console.log(
+            '[KeydownHandler] Cursor for EMPTY Inlay (no new token, no post-selection tokens):',
+            { cursorIndexAfterDelete, cursorOffsetAfterDelete }
+          )
+        }
+
+        // Final check for cursor if newTokens is empty
+        if (newTokens.length === 0) {
+          savedCursorRef.current = null
+          console.log(
+            '[KeydownHandler] Final newTokens is empty. savedCursorRef.current = null'
+          )
+        } else {
+          // Clamp cursorIndex to be within bounds of newTokens
+          cursorIndexAfterDelete = Math.max(
+            0,
+            Math.min(cursorIndexAfterDelete, newTokens.length - 1)
+          )
+          savedCursorRef.current = {
+            index: cursorIndexAfterDelete,
+            offset: cursorOffsetAfterDelete
+          }
+          console.log(
+            '[KeydownHandler] Final newTokens NOT empty. savedCursorRef.current:',
+            savedCursorRef.current
+          )
+        }
+
+        console.log(
+          '[KeydownHandler] FINAL newTokens before setState:',
+          JSON.stringify(newTokens)
+        )
+        console.log(
+          '[KeydownHandler] FINAL newSpacerCharsInternal before setState:',
+          JSON.stringify(newSpacerCharsInternal)
+        )
+        setTokens(newTokens)
+        // Ensure spacerChars list has same length as newTokens, fill with null if necessary
+        while (newSpacerCharsInternal.length < newTokens.length) {
+          newSpacerCharsInternal.push(null)
+        }
+        if (newSpacerCharsInternal.length > newTokens.length) {
+          newSpacerCharsInternal.length = newTokens.length
+        }
+        setSpacerChars(newSpacerCharsInternal)
+        console.log(
+          '[KeydownHandler] State updated. Final programmaticCursorExpectationRef:',
+          savedCursorRef.current
+        )
+
+        programmaticCursorExpectationRef.current = savedCursorRef.current
+        if (activeTokenRef.current) activeTokenRef.current = null
+        onTokenFocus?.(null)
+        selectAllStateRef.current = 'none' // Reset selectAllState
+        console.log(
+          '[KeydownHandler] Cross-token deletion COMPLETE. selectAllStateRef reset to none.'
+        )
+        return
+      }
+      console.log(
+        '[KeydownHandler] Did NOT enter cross-token deletion logic. selectAllState:',
+        selectAllState
+      )
 
       const currentSelection = window.getSelection()
       if (!currentSelection || currentSelection.rangeCount === 0) return
@@ -310,6 +558,14 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                     activeIndex
                   )
 
+                  // Check if the token being removed/merged is empty
+                  if (
+                    currentTokenTextForActualMerge === '' &&
+                    forceImmediateRestoreRef
+                  ) {
+                    forceImmediateRestoreRef.current = true
+                  }
+
                   const mergedText =
                     prevTokenTextForMerge + currentTokenTextForActualMerge
                   const newParsedMergedToken = parseToken(mergedText)
@@ -328,6 +584,16 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                     }
                     programmaticCursorExpectationRef.current =
                       savedCursorRef.current
+
+                    // If the merged token was the active one, clear active state
+                    if (
+                      activeTokenRef.current &&
+                      activeTokenRef.current.getAttribute('data-token-id') ===
+                        activeIndex.toString()
+                    ) {
+                      activeTokenRef.current = null
+                      onTokenFocus?.(null)
+                    }
                     return // Merge handled
                   }
                   // If merge fails, it's like backspace at start of first token - no-op here.
@@ -356,6 +622,14 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                     nextTokenIndex
                   )
 
+                  // Check if the token being removed/merged is empty
+                  if (
+                    currentTokenTextForActualMerge === '' &&
+                    forceImmediateRestoreRef
+                  ) {
+                    forceImmediateRestoreRef.current = true
+                  }
+
                   const mergedText =
                     currentTokenTextForActualMerge + nextTokenTextForMerge
                   const newParsedMergedToken = parseToken(mergedText)
@@ -374,6 +648,16 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                     }
                     programmaticCursorExpectationRef.current =
                       savedCursorRef.current
+
+                    // If the token that was merged into (and thus effectively the one where deletion occurred at its end)
+                    // is the active one, and the NEXT one was removed. The active token remains, but its content changed.
+                    // No need to nullify activeTokenRef here, as it's still token 'activeIndex'.
+                    // However, if focus was somehow on nextTokenIndex (though unlikely for Delete at end of current),
+                    // that would be a different case. For now, assume activeIndex is the focus.
+                    // The key is that token activeIndex *remains*.
+
+                    // Consider if onTokenFocus needs to be called if the *content* of the active token changes.
+                    // For now, assuming focus remains on activeIndex.
                     return // Merge handled
                   }
                 }
@@ -543,7 +827,8 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       parseToken,
       removeToken,
       onTokenFocus,
-      saveCursor
+      saveCursor,
+      forceImmediateRestoreRef
     ]
   )
 
@@ -999,7 +1284,8 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       insertSpacerOnCommit,
       displayCommitCharSpacer,
       _getEditableTextValue,
-      handleRemoveTokenOnKeyDownInternal // Include the memoized helper
+      handleRemoveTokenOnKeyDownInternal,
+      forceImmediateRestoreRef
     ]
   )
 
