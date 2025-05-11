@@ -20,6 +20,7 @@ import {
 } from './hooks/useSelectionChangeHandler'
 import { useMemoizedCallback } from './hooks/useMemoizedCallback'
 import { useCopyHandler } from './hooks/useCopyHandler'
+import { usePasteHandler } from './hooks/usePasteHandler'
 
 const [createInlayContext] = createContextScope(COMPONENT_NAME)
 
@@ -143,10 +144,20 @@ const _Inlay = <T,>(
 
   // Effect to keep spacerCharsListRef in sync with tokens length
   React.useEffect(() => {
-    if (spacerChars.length !== tokens.length) {
-      setSpacerChars(Array(tokens.length).fill(null))
+    const expectedSpacerCount = Math.max(0, tokens.length - 1)
+    if (spacerChars.length !== expectedSpacerCount) {
+      const newSpacers = Array(expectedSpacerCount).fill(null)
+      // Preserve existing spacers if possible when resizing
+      for (
+        let i = 0;
+        i < Math.min(spacerChars.length, expectedSpacerCount);
+        i++
+      ) {
+        newSpacers[i] = spacerChars[i]
+      }
+      setSpacerChars(newSpacers)
     }
-  }, [tokens.length, spacerChars.length])
+  }, [tokens.length, spacerChars, setSpacerChars])
 
   const savedCursorRef = React.useRef<{
     index: number
@@ -723,6 +734,30 @@ const _Inlay = <T,>(
     tokens,
     spacerChars,
     _getEditableTextValue
+  })
+
+  // Call the usePasteHandler hook
+  usePasteHandler<T>({
+    mainDivRef: ref,
+    tokens,
+    setTokens,
+    spacerChars,
+    setSpacerChars,
+    activeTokenRef,
+    savedCursorRef,
+    programmaticCursorExpectationRef,
+    selectAllStateRef,
+    parseToken: memoizedParseToken,
+    removeToken: removeTokenScoped,
+    _getEditableTextValue,
+    onTokenFocus: memoizedOnTokenFocus,
+    saveCursor,
+    commitOnChars,
+    defaultNewTokenValue,
+    addNewTokenOnCommit,
+    insertSpacerOnCommit,
+    displayCommitCharSpacer: memoizedDisplayCommitCharSpacer,
+    forceImmediateRestoreRef
   })
 
   const Comp = asChild ? Slot : 'div'

@@ -64,7 +64,10 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
         savedCursorRef.current
       const targetTokenId = definitelySavedCursor.index
 
-      const executeFocusLogic = (foundTokenElement: HTMLElement | null) => {
+      const executeFocusLogic = (
+        foundTokenElement: HTMLElement | null,
+        isFinalAttempt: boolean = true
+      ) => {
         requestAnimationFrame(() => {
           const focusTarget = mainDivRef.current
 
@@ -164,12 +167,33 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
               activeTokenRef.current = null
               onTokenFocus?.(null)
             }
+
+            if (
+              !isFinalAttempt &&
+              savedCursorRef.current &&
+              savedCursorRef.current.index === targetTokenId
+            ) {
+              console.log(
+                `[useLayoutEffect #${currentDomKey} rAF_INNER] Token ${targetTokenId} not found on first forced attempt, scheduling a second attempt.`
+              )
+              requestAnimationFrame(() => {
+                console.log(
+                  `[useLayoutEffect #${currentDomKey} rAF_RETRY] Retrying query for token: ${targetTokenId}.`
+                )
+                const tokenElementInRetry = mainDivRef.current?.querySelector(
+                  `[data-token-id="${targetTokenId}"]`
+                ) as HTMLElement | null
+                executeFocusLogic(tokenElementInRetry, true)
+              })
+              return
+            }
+
             if (
               savedCursorRef.current &&
               savedCursorRef.current.index === targetTokenId
             ) {
               console.log(
-                `[useLayoutEffect #${currentDomKey} rAF_INNER] Clearing savedCursorRef as token ${targetTokenId} was not found.`
+                `[useLayoutEffect #${currentDomKey} rAF_INNER] Clearing savedCursorRef as token ${targetTokenId} was not found (final attempt).`
               )
               savedCursorRef.current = null
             }
@@ -177,23 +201,21 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
         })
       }
 
-      const saved = savedCursorRef.current // Re-check savedCursorRef before deciding path
       const activeIdx = activeTokenRef.current
         ? parseInt(activeTokenRef.current.dataset.tokenId!)
         : null
 
-      // Ensure mainDivRef.current is not null before accessing properties or methods
       const needsDoubleRAF =
-        saved &&
+        definitelySavedCursor && // definitelySavedCursor is from savedCursorRef.current, so it's checked
         mainDivRef.current &&
         document.activeElement === mainDivRef.current &&
-        (activeIdx === null || activeIdx !== saved.index)
+        (activeIdx === null || activeIdx !== definitelySavedCursor.index)
 
       if (forceImmediateRestoreRef.current) {
         console.log(
           `[useLayoutEffect #${currentDomKey}] Prioritizing forceImmediateRestoreRef. Scheduling single rAF.`
         )
-        forceImmediateRestoreRef.current = false // Reset the flag
+        forceImmediateRestoreRef.current = false
         requestAnimationFrame(() => {
           console.log(
             `[useLayoutEffect #${currentDomKey} rAF_IMMEDIATE] Running. Querying for token: ${targetTokenId}. activeElement BEFORE: ${document.activeElement?.tagName}`
@@ -201,7 +223,7 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
           const tokenElementInRAF = mainDivRef.current?.querySelector(
             `[data-token-id="${targetTokenId}"]`
           ) as HTMLElement | null
-          executeFocusLogic(tokenElementInRAF)
+          executeFocusLogic(tokenElementInRAF, false) // Pass false for isFinalAttempt
           console.log(
             `[useLayoutEffect #${currentDomKey} rAF_IMMEDIATE] END. activeElement AFTER executeFocusLogic: ${document.activeElement?.tagName}`
           )
@@ -218,7 +240,7 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
             const tokenElementInRAF = mainDivRef.current?.querySelector(
               `[data-token-id="${targetTokenId}"]`
             ) as HTMLElement | null
-            executeFocusLogic(tokenElementInRAF)
+            executeFocusLogic(tokenElementInRAF, true) // Final attempt
             console.log(
               `[useLayoutEffect #${currentDomKey} rAF2] END. activeElement AFTER executeFocusLogic: ${document.activeElement?.tagName}`
             )
@@ -232,11 +254,10 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
           console.log(
             `[useLayoutEffect #${currentDomKey} rAF1] Running. Querying for token: ${targetTokenId}. activeElement BEFORE: ${document.activeElement?.tagName}`
           )
-          // Ensure mainDivRef.current is available before querying
           const targetTokenElement = mainDivRef.current?.querySelector(
             `[data-token-id="${targetTokenId}"]`
           ) as HTMLElement | null
-          executeFocusLogic(targetTokenElement)
+          executeFocusLogic(targetTokenElement, true) // Final attempt
           console.log(
             `[useLayoutEffect #${currentDomKey} rAF1] END. activeElement AFTER executeFocusLogic: ${document.activeElement?.tagName}`
           )

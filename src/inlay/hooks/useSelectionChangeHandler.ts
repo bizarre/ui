@@ -219,14 +219,11 @@ export function useSelectionChangeHandler(
         collapsed
       } = range
 
-      // Clear cross-token selection if the selection is collapsed
+      // If the selection is collapsed, any previous 'select all', 'select token', or 'cross-token' state is no longer valid.
       if (collapsed) {
-        if (
-          typeof selectAllStateRef.current === 'object' &&
-          selectAllStateRef.current.type === 'cross-token'
-        ) {
+        if (selectAllStateRef.current !== 'none') {
           console.log(
-            '[selectionchange] Selection collapsed, clearing cross-token state from selectAllStateRef.'
+            `[selectionchange] Selection collapsed. Resetting selectAllStateRef from '${JSON.stringify(selectAllStateRef.current)}' to 'none'.`
           )
           selectAllStateRef.current = 'none'
         }
@@ -249,19 +246,6 @@ export function useSelectionChangeHandler(
           : (endContainer as Element).closest?.('[data-token-id]')
             ? (endContainer as HTMLElement)
             : null
-
-      // Clear cross-token selection from selectAllStateRef if selection is collapsed
-      if (collapsed) {
-        if (
-          typeof selectAllStateRef.current === 'object' &&
-          selectAllStateRef.current.type === 'cross-token'
-        ) {
-          console.log(
-            '[selectionchange] Selection collapsed, clearing cross-token state from selectAllStateRef.'
-          )
-          selectAllStateRef.current = 'none'
-        }
-      }
 
       if (
         startTokenEl &&
@@ -334,17 +318,24 @@ export function useSelectionChangeHandler(
               endTokenIndex: finalEndIdx,
               endOffset: endOffsetInToken
             }
-            // Consider a new state for selectAllStateRef, e.g., 'cross-token'
-            // For now, using 'all' might be okay for deletion, but 'cross-token' would be more accurate.
-            // selectAllStateRef.current = 'all' // Or 'cross-token'
             if (activeTokenRef.current) {
-              // Clear single active token state
               activeTokenRef.current = null
               onTokenFocus?.(null)
             }
-            if (savedCursorRef.current) savedCursorRef.current = null
-            if (programmaticCursorExpectationRef.current)
-              programmaticCursorExpectationRef.current = null
+
+            if (
+              !programmaticCursorExpectationRef.current &&
+              savedCursorRef.current
+            ) {
+              console.log(
+                '[selectionchange] Cross-token detected, NO expectation, clearing savedCursor.'
+              )
+              savedCursorRef.current = null
+            } else if (programmaticCursorExpectationRef.current) {
+              console.log(
+                '[selectionchange] Cross-token detected, but expectation exists. NOT clearing savedCursor.'
+              )
+            }
 
             console.log(
               '[selectionchange] Cross-token selection DETECTED/UPDATED in selectAllStateRef:',

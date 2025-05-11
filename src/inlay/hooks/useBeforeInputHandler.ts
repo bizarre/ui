@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { ZWS } from '../inlay.constants'
+import { calculateOffsetInTextProvider } from '../utils/domNavigationUtils'
 // We might need ScopedProps or other common types if we were to use context, but for now, direct props.
 
 type UseBeforeInputHandlerProps<T> = {
@@ -315,93 +316,127 @@ export function useBeforeInputHandler<T>({
           }
           return // Deletion handled or passed to onKeyDown
         } else if (event.data) {
-          // Character insertion
+          // --- CHARACTER INSERTION LOGIC MODIFICATION ---
           const charTyped = event.data
-          e.preventDefault() // Prevent browser's native insertion
+          e.preventDefault()
 
           let currentTextInToken = ''
-          if (activeTokenElement) {
-            const editableRegion = activeTokenElement.querySelector(
-              '[data-inlay-editable-region="true"]'
-            )
-            if (editableRegion) {
-              const regionText = editableRegion.textContent || ''
-              currentTextInToken = regionText === ZWS ? '' : regionText
-            } else {
-              const tokenText = activeTokenElement.textContent || ''
-              currentTextInToken = tokenText === ZWS ? '' : tokenText
-            }
+          const editableRegion = activeTokenElement.querySelector(
+            '[data-inlay-editable-region="true"]'
+          ) as HTMLElement | null
+          const textProviderForCalc = editableRegion || activeTokenElement
+
+          if (editableRegion) {
+            const regionText = editableRegion.textContent || ''
+            currentTextInToken = regionText === ZWS ? '' : regionText
+          } else {
+            const tokenText = activeTokenElement.textContent || ''
+            currentTextInToken = tokenText === ZWS ? '' : tokenText
           }
 
           let newTextForToken = ''
           let newCursorOffset = 0
 
-          let originalInsertionOffset: number
+          const selection = window.getSelection()
 
           if (
-            savedCursorRef.current &&
-            savedCursorRef.current.index === activeIndex
+            selection &&
+            selection.rangeCount > 0 &&
+            activeTokenElement.contains(selection.anchorNode)
           ) {
-            originalInsertionOffset = savedCursorRef.current.offset
-            console.log(
-              '[_onBeforeInputHandler] Using savedCursorRef offset for insertion. Index:',
-              activeIndex,
-              'Saved Offset:',
-              originalInsertionOffset
-            )
-          } else {
-            const selection = window.getSelection()
+            const range = selection.getRangeAt(0)
             if (
-              selection &&
-              selection.rangeCount > 0 &&
-              selection.anchorNode &&
-              activeTokenElement.contains(selection.anchorNode)
+              !range.collapsed &&
+              activeTokenElement.contains(range.endContainer)
             ) {
-              const range = selection.getRangeAt(0)
-              originalInsertionOffset =
-                range.startContainer === activeTokenElement
-                  ? currentTextInToken.length
-                  : range.startOffset
+              // Non-collapsed selection within the token
+              const selectionStartInTokenText = calculateOffsetInTextProvider(
+                textProviderForCalc,
+                range.startContainer,
+                range.startOffset,
+                selection.anchorNode,
+                selection.anchorOffset
+              )
+              const selectionEndInTokenText = calculateOffsetInTextProvider(
+                textProviderForCalc,
+                range.endContainer,
+                range.endOffset,
+                selection.focusNode, // Use focusNode for the end of the range
+                selection.focusOffset
+              )
+
+              console.log(
+                `[_onBeforeInputHandler] Replacing selection: ${selectionStartInTokenText}-${selectionEndInTokenText} with '${charTyped}'`
+              )
+              newTextForToken =
+                currentTextInToken.slice(0, selectionStartInTokenText) +
+                charTyped +
+                currentTextInToken.slice(selectionEndInTokenText)
+              newCursorOffset = selectionStartInTokenText + charTyped.length
             } else {
-              originalInsertionOffset = currentTextInToken.length
+              // Collapsed selection or selection not fully in token (treat as collapsed at start for safety)
+              let originalInsertionOffset = calculateOffsetInTextProvider(
+                textProviderForCalc,
+                range.startContainer, // Use startContainer for collapsed
+                range.startOffset,
+                selection.anchorNode,
+                selection.anchorOffset
+              )
+              // Fallback if calculateOffsetInTextProviderUtil had issues or selection was weird
+              if (
+                savedCursorRef.current &&
+                savedCursorRef.current.index === activeIndex &&
+                !(
+                  selection.anchorNode &&
+                  activeTokenElement.contains(selection.anchorNode)
+                )
+              ) {
+                originalInsertionOffset = savedCursorRef.current.offset
+              }
+              originalInsertionOffset = Math.max(
+                0,
+                Math.min(originalInsertionOffset, currentTextInToken.length)
+              )
+
+              console.log(
+                `[_onBeforeInputHandler] Collapsed insertion at: ${originalInsertionOffset} with '${charTyped}'`
+              )
+              newTextForToken =
+                currentTextInToken.slice(0, originalInsertionOffset) +
+                charTyped +
+                currentTextInToken.slice(originalInsertionOffset)
+              newCursorOffset = originalInsertionOffset + charTyped.length
             }
-            console.warn(
-              '[_onBeforeInputHandler] Falling back to DOM selection for insertion offset. Index:',
-              activeIndex,
-              'DOM Offset Used:',
-              originalInsertionOffset,
-              'SavedCursor:',
-              savedCursorRef.current
+          } else {
+            // Fallback if no selection or selection not in token, use saved cursor or end of token
+            let fallbackOffset =
+              savedCursorRef.current &&
+              savedCursorRef.current.index === activeIndex
+                ? savedCursorRef.current.offset
+                : currentTextInToken.length
+            fallbackOffset = Math.max(
+              0,
+              Math.min(fallbackOffset, currentTextInToken.length)
             )
+            console.log(
+              `[_onBeforeInputHandler] Fallback insertion at: ${fallbackOffset} with '${charTyped}'`
+            )
+            newTextForToken =
+              currentTextInToken.slice(0, fallbackOffset) +
+              charTyped +
+              currentTextInToken.slice(fallbackOffset)
+            newCursorOffset = fallbackOffset + charTyped.length
           }
 
-          originalInsertionOffset = Math.max(
-            0,
-            Math.min(originalInsertionOffset, currentTextInToken.length)
-          )
-
-          newTextForToken =
-            currentTextInToken.slice(0, originalInsertionOffset) +
-            charTyped +
-            currentTextInToken.slice(originalInsertionOffset)
-          newCursorOffset = originalInsertionOffset + charTyped.length
-
-          console.log(
-            '[_onBeforeInputHandler] Character insertion. OriginalOffset Used:',
-            originalInsertionOffset,
-            'NewText:',
-            JSON.stringify(newTextForToken),
-            'NewOffset:',
-            newCursorOffset
-          )
-
+          // ... (rest of existing logic: parseToken, setTokens, savedCursorRef, programmaticCursorExpectationRef)
           const newValueForToken = parseToken(newTextForToken)
           if (newValueForToken !== null) {
-            const newTokensResult = [...tokens]
+            const newTokensResult = [...tokens] // currentTokens is from props
             if (activeIndex >= 0 && activeIndex < newTokensResult.length) {
               newTokensResult[activeIndex] = newValueForToken
-              setTokens(newTokensResult)
+              setTokens(newTokensResult) // setTokensFn is from props
               savedCursorRef.current = {
+                // savedCursorRefObj is from props
                 index: activeIndex,
                 offset: newCursorOffset
               }
@@ -417,7 +452,7 @@ export function useBeforeInputHandler<T>({
               newTextForToken
             )
           }
-          return // Insertion handled
+          return // Character insertion handled
         }
       } else if (
         event.data &&

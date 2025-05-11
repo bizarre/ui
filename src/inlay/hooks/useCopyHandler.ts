@@ -183,25 +183,22 @@ export function useCopyHandler<T>({
             ) as HTMLElement | null)
 
       if (!startTokenEl || !endTokenEl) {
-        // Selection does not properly start and end within tokens
-        // Check if selection is within the main div but not in any token (e.g. selecting spaces between tokens)
-        let textToCopy = ''
+        let textToCopyFromRange = ''
         if (
           mainDivRef.current &&
           mainDivRef.current.contains(range.commonAncestorContainer)
         ) {
-          // A more general approach if selection is not neatly within tokens:
-          // Clone the selection range's contents and extract text.
-          // This might grab text from non-token elements if they exist between tokens.
-          // For now, if not in tokens, copy selected text as is from the fragment.
-          // This might re-introduce some of the original issues if the selection is complex and not token-bound.
-          // However, the primary goal is fixing token-bound copies.
           const clonedSelection = range.cloneContents()
           const tempDiv = document.createElement('div')
           tempDiv.appendChild(clonedSelection)
-          textToCopy = tempDiv.textContent || ''
+          textToCopyFromRange = tempDiv.textContent || ''
+          textToCopyFromRange = textToCopyFromRange.replace(/\u200B/g, '')
         }
-        event.clipboardData?.setData('text/plain', textToCopy)
+        event.clipboardData?.setData('text/plain', textToCopyFromRange)
+        console.log(
+          '[useCopyHandler] Copied text from general range (fallback):',
+          JSON.stringify(textToCopyFromRange)
+        )
         return
       }
 
@@ -283,8 +280,12 @@ export function useCopyHandler<T>({
           }
         }
       }
-      const textToCopy = textParts.join('')
+      const textToCopy = textParts.join('').replace(/\u200B/g, '')
       event.clipboardData?.setData('text/plain', textToCopy)
+      console.log(
+        '[useCopyHandler] Copied text from token parts:',
+        JSON.stringify(textToCopy)
+      )
     }
 
     mainDiv.addEventListener('copy', handleCopy as EventListener)
