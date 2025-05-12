@@ -79,13 +79,22 @@ type Token = InferInlay<typeof MentionInlay>
 
 export const Mentions = () => {
   const [value, setValue] = React.useState<Token[]>([])
+  const [activeIndex, setActiveIndex] = React.useState<number | null>(null)
+
+  // const updateToken = (index: number, value: Token) => {
+  //   setValue((prev) => {
+  //     const newTokens = [...prev]
+  //     newTokens[index] = value
+  //     return newTokens
+  //   })
+  // }
 
   return (
     <>
       <MentionInlay.Root
         data-testid="inlay__root"
         parse={(value) => {
-          if (value.startsWith('@') && value.length > 1) {
+          if (value.startsWith('@')) {
             return {
               username: value.slice(1),
               avatar: 'https://placehold.co/16x16'
@@ -96,7 +105,9 @@ export const Mentions = () => {
         onChange={(value) => {
           setValue(value)
         }}
-        className="flex items-center"
+        value={value}
+        onFocus={setActiveIndex}
+        className="flex items-center border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-300 p-1.5 leading-none"
         commitOnChars={[' ']}
         displayCommitCharSpacer
         addNewTokenOnCommit
@@ -111,17 +122,27 @@ export const Mentions = () => {
                 index={index}
               />
             ) : (
-              <span className="inline-flex items-center font-semibold">
-                <img
-                  src={token.avatar}
-                  alt={token.username}
-                  className="h-4 w-4 rounded-full mr-0.5"
-                />
-                <MentionInlay.EditableText
-                  value={`@${token.username}`}
-                  index={index}
-                />
-              </span>
+              <>
+                <div className="relative inline">
+                  <span className="inline-flex items-center font-semibold">
+                    <img
+                      src={token.avatar}
+                      alt={token.username}
+                      className="h-4 w-4 rounded-full mr-0.5"
+                    />
+                    <MentionInlay.EditableText
+                      value={`@${token.username}`}
+                      index={index}
+                    />
+                  </span>
+
+                  {activeIndex === index && (
+                    <div className="absolute top-5 left-0 bg-red-500 w-full min-w-[250px]">
+                      Testing
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </MentionInlay.Token>
         ))}

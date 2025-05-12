@@ -72,7 +72,11 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
           const focusTarget = mainDivRef.current
 
           if (foundTokenElement) {
-            if (focusTarget && document.activeElement !== focusTarget) {
+            if (
+              focusTarget &&
+              document.activeElement !== focusTarget &&
+              !focusTarget.contains(document.activeElement)
+            ) {
               console.log(
                 `[useLayoutEffect #${currentDomKey} rAF_INNER] About to focus target (main_div). Current activeElement: ${document.activeElement?.tagName}`
               )
@@ -157,7 +161,11 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
             console.log(
               `[useLayoutEffect #${currentDomKey} rAF_INNER] Target token element with ID ${targetTokenId} not found. Focusing main div. activeElement BEFORE: ${document.activeElement?.tagName}`
             )
-            if (focusTarget && document.activeElement !== focusTarget) {
+            if (
+              focusTarget &&
+              document.activeElement !== focusTarget &&
+              !focusTarget.contains(document.activeElement)
+            ) {
               focusTarget.focus({ preventScroll: true })
               console.log(
                 `[useLayoutEffect #${currentDomKey} rAF_INNER] Focused main div (token not found). activeElement AFTER: ${document.activeElement?.tagName}`
@@ -262,6 +270,46 @@ export function useInlayLayoutEffect<T>(props: UseInlayLayoutEffectProps<T>) {
             `[useLayoutEffect #${currentDomKey} rAF1] END. activeElement AFTER executeFocusLogic: ${document.activeElement?.tagName}`
           )
         })
+      }
+
+      // --- Fast-path -----------------------------------------------------
+      // If the root already owns focus *and* the token element we need is
+      // present in the DOM, we can restore the caret synchronously inside
+      // this layout-effect (i.e. before the browser paints). Doing so avoids
+      // the 1-frame delay produced by the rAF path below and therefore
+      // eliminates the residual intra-token flicker the user still noticed.
+
+      const immediateTokenEl = mainDivRef.current?.querySelector(
+        `[data-token-id="${targetTokenId}"]`
+      ) as HTMLElement | null
+
+      if (
+        immediateTokenEl &&
+        document.activeElement === mainDivRef.current &&
+        !forceImmediateRestoreRef.current // don't clash with explicit forces
+      ) {
+        // Perform the restore right now.
+        restoreCursor(definitelySavedCursor)
+
+        if (activeTokenRef.current !== immediateTokenEl) {
+          activeTokenRef.current = immediateTokenEl
+          onTokenFocus?.(definitelySavedCursor.index)
+        }
+
+        // Expectation fulfilled → clear it to avoid the rAF path.
+        if (
+          programmaticCursorExpectationRef.current &&
+          programmaticCursorExpectationRef.current.index ===
+            definitelySavedCursor.index &&
+          programmaticCursorExpectationRef.current.offset ===
+            definitelySavedCursor.offset
+        ) {
+          programmaticCursorExpectationRef.current = null
+        }
+
+        // We handled everything synchronously – no need for the slower rAF
+        // branches. Exit the effect early.
+        return
       }
     } else {
       console.log(

@@ -894,6 +894,7 @@ const _Inlay = <T,>(
             pointerEvents: 'none',
             zIndex: -1
           }}
+          contentEditable={false}
           aria-hidden="true"
         />
         {children}
