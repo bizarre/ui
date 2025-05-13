@@ -62,6 +62,13 @@ export type OnInputGlobalActions<T> = {
     newCursor: { index: number; offset: number } | null,
     newSpacers?: (string | null)[]
   ) => void
+
+  /**
+   * Programmatically focuses the inlay at a specific token and cursor offset.
+   * This will move browser focus to the Inlay root (if needed) and schedule
+   * the caret to be restored inside the requested token.
+   */
+  focus: (index: number, offset: number) => void
 }
 
 export type OnInputContext<T> = {
@@ -142,6 +149,23 @@ export type InlayProps<T> = {
    * or for internal operations needing a string representation of the token.
    */
   getTokenDisplayValue?: (token: T) => string
+
+  /*
+   * Controlled caret (cursor) position.
+   * If provided, the caret inside the inlay will always try to follow this value.
+   * When omitted, the caret is managed internally.
+   */
+  caret?: CaretPosition
+
+  /**
+   * Uncontrolled initial caret position. Ignored when `caret` is supplied.
+   */
+  defaultCaret?: CaretPosition
+
+  /**
+   * Called whenever the caret position changes as a consequence of user interaction.
+   */
+  onCaretChange?: (caret: CaretPosition) => void
 } & Omit<React.HTMLAttributes<HTMLElement>, 'onChange' | 'onFocus' | 'onInput'>
 
 export type InlayTokenProps = {
@@ -150,3 +174,6 @@ export type InlayTokenProps = {
   asChild?: boolean
   editable?: boolean
 }
+
+// Caret (cursor) position type
+export type CaretPosition = { index: number; offset: number } | null

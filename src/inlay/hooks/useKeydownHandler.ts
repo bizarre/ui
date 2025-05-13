@@ -34,6 +34,9 @@ export type UseKeydownHandlerProps<T> = {
   parseToken: (value: string) => T | null
   removeToken: (index: number) => void // This is the removeToken from _Inlay's scope
   saveCursor: () => void // This is the saveCursor from _Inlay's scope
+  restoreCursor: (
+    cursorToRestore?: { index: number; offset: number } | null
+  ) => void // Expose restoreCursor for programmatic focus
   onTokenFocus?: (index: number | null) => void
 
   // Props from InlayProps<T>
@@ -63,6 +66,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
     parseToken,
     removeToken,
     saveCursor, // Added from props
+    restoreCursor, // Added from props
     onTokenFocus,
     onCharInput,
     commitOnChars,
@@ -828,6 +832,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       removeToken,
       onTokenFocus,
       saveCursor,
+      restoreCursor,
       forceImmediateRestoreRef
     ]
   )
@@ -911,10 +916,15 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
             Math.min(cursorOffsetInToken, currentTextInDOM.length)
           )
 
+          // Use a mutable snapshot so that update() can change what commit/split see
+          let liveTextSnapshot = currentTextInDOM
+
           tokenHandleForContext = {
             value: currentTokenValueFromState,
             index: activeIndex,
-            text: currentTextInDOM,
+            get text() {
+              return liveTextSnapshot
+            },
             cursorOffset: cursorOffsetInToken,
             isEditable,
             update: (newText, newCursorOffset) => {
@@ -933,6 +943,9 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                 }
                 programmaticCursorExpectationRef.current =
                   savedCursorRef.current
+
+                // Update live snapshot so subsequent commit/split use the new text
+                liveTextSnapshot = newText
                 setPreventDefaultFlag()
               }
             },
@@ -940,10 +953,10 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
               if (
                 !isEditable ||
                 cursorOffsetInToken === 0 ||
-                cursorOffsetInToken === currentTextInDOM.length
+                cursorOffsetInToken === liveTextSnapshot.length
               )
                 return
-              const textForFirstPart = currentTextInDOM.substring(
+              const textForFirstPart = liveTextSnapshot.substring(
                 0,
                 cursorOffsetInToken
               )
@@ -975,7 +988,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
             },
             commit: (options) => {
               if (!isEditable) return
-              const committedValue = parseToken(currentTextInDOM)
+              const committedValue = parseToken(liveTextSnapshot)
               if (committedValue === null) return
               const newTokens = [...tokens]
               newTokens[activeIndex] = committedValue
@@ -1049,6 +1062,53 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
             else setSpacerChars(Array(newTokens.length).fill(null))
             savedCursorRef.current = newCursor
             programmaticCursorExpectationRef.current = newCursor
+            setPreventDefaultFlag()
+          },
+          focus: (tokenIndex: number, caretOffset: number) => {
+            // Move browser focus to the inlay root if it does not currently own focus
+            if (
+              mainDivRef.current &&
+              document.activeElement !== mainDivRef.current
+            ) {
+              try {
+                mainDivRef.current.focus({ preventScroll: true })
+              } catch {
+                // Ignore focus errors (e.g. if element is not focusable yet)
+              }
+            }
+
+            // Clamp values just in case
+            const safeIndex = Math.max(
+              0,
+              Math.min(tokenIndex, tokens.length - 1)
+            )
+            const safeOffset = Math.max(0, caretOffset)
+
+            savedCursorRef.current = { index: safeIndex, offset: safeOffset }
+            programmaticCursorExpectationRef.current = savedCursorRef.current
+
+            // Ensure the next layout effect tries to restore immediately
+            forceImmediateRestoreRef.current = true
+
+            // Update logical focus state for consumers
+            onTokenFocus?.(safeIndex)
+
+            // Immediately attempt to restore cursor now that we've set refs.
+            if (mainDivRef.current) {
+              restoreCursor({ index: safeIndex, offset: safeOffset })
+
+              // Also ensure activeTokenRef points at the element
+              const tokenEl = mainDivRef.current.querySelector(
+                `[data-token-id="${safeIndex}"]`
+              ) as HTMLElement | null
+              if (tokenEl) {
+                activeTokenRef.current = tokenEl
+              }
+            }
+
+            // No need to call setPreventDefaultFlag here, as this action can be invoked
+            // outside of an actual key event. It is included for completeness when invoked
+            // from within onCharInput.
             setPreventDefaultFlag()
           }
         }
@@ -1276,6 +1336,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       parseToken,
       removeToken,
       saveCursor,
+      restoreCursor,
       onTokenFocus,
       onCharInput,
       commitOnChars,

@@ -38,6 +38,9 @@ const _Inlay = <T,>(
     onFocus: onTokenFocus,
     value: tokensProp,
     defaultValue: defaultTokens,
+    caret: caretProp,
+    defaultCaret,
+    onCaretChange,
     parse: parseToken,
     commitOnChars,
     defaultNewTokenValue,
@@ -121,6 +124,22 @@ const _Inlay = <T,>(
     defaultProp: defaultTokens ?? [],
     onChange: memoizedOnTokensChange
   })
+
+  // Controlled / uncontrolled caret (cursor) state
+  type Caret = { index: number; offset: number } | null
+
+  const [caretState, setCaretState] = useControllableState<Caret>({
+    prop: caretProp as Caret | undefined,
+    defaultProp: (defaultCaret ?? null) as Caret,
+    onChange: onCaretChange
+  })
+
+  // Helper for shallow equality of caret objects
+  const isSameCaret = React.useCallback((a: Caret, b: Caret) => {
+    if (a === b) return true
+    if (a === null || b === null) return false
+    return a.index === b.index && a.offset === b.offset
+  }, [])
 
   console.log(
     '[_Inlay] Rendering. spacerChars:',
@@ -251,6 +270,9 @@ const _Inlay = <T,>(
     const sel = window.getSelection()
     if (!sel || sel.rangeCount === 0) {
       savedCursorRef.current = null
+      if (!isSameCaret(null, caretState)) {
+        setCaretState(null)
+      }
       return
     }
 
@@ -328,17 +350,26 @@ const _Inlay = <T,>(
           }
         }
 
-        savedCursorRef.current = {
+        const newCaret = {
           index: tokenIndex,
           offset: finalOffset
+        }
+        savedCursorRef.current = newCaret
+        if (!isSameCaret(newCaret, caretState)) {
+          setCaretState(newCaret)
         }
         console.log('[saveCursor] Saved:', savedCursorRef.current)
         return
       }
     }
-    savedCursorRef.current = null
+    if (savedCursorRef.current !== null) {
+      savedCursorRef.current = null
+      if (!isSameCaret(null, caretState)) {
+        setCaretState(null)
+      }
+    }
     console.log('[saveCursor] Cleared saved cursor (no tokenEl or tokenId)')
-  }, [])
+  }, [caretState, isSameCaret, setCaretState])
 
   const restoreCursor = React.useCallback(
     (cursorToRestore?: { index: number; offset: number } | null) => {
@@ -799,7 +830,8 @@ const _Inlay = <T,>(
     insertSpacerOnCommit,
     displayCommitCharSpacer: memoizedDisplayCommitCharSpacer,
     _getEditableTextValue,
-    forceImmediateRestoreRef
+    forceImmediateRestoreRef,
+    restoreCursor
   })
 
   // Call the useCopyHandler hook
@@ -833,6 +865,17 @@ const _Inlay = <T,>(
     displayCommitCharSpacer: memoizedDisplayCommitCharSpacer,
     forceImmediateRestoreRef
   })
+
+  // Sync external caret prop changes into internal refs
+  React.useEffect(() => {
+    if (!isSameCaret(caretState, savedCursorRef.current)) {
+      savedCursorRef.current = caretState
+      programmaticCursorExpectationRef.current = caretState
+      if (caretState !== null) {
+        forceImmediateRestoreRef.current = true
+      }
+    }
+  }, [caretState, isSameCaret])
 
   const Comp = asChild ? Slot : 'div'
 
@@ -978,12 +1021,10 @@ type InlayTokenEditableText = {
   index: number
 } & Omit<React.HTMLAttributes<HTMLElement>, 'onChange' | 'onFocus' | 'onInput'>
 
-const InlayTokenEditableText = ({
-  value,
-  index,
-  __scope,
-  ...props
-}: ScopedProps<InlayTokenEditableText>) => {
+const InlayTokenEditableText = React.forwardRef<
+  HTMLElement,
+  ScopedProps<InlayTokenEditableText>
+>(({ value, index, __scope, ...props }, forwardedRef) => {
   const { _registerEditableTextValue } = useInlayContext(
     COMPONENT_NAME,
     __scope
@@ -1002,6 +1043,7 @@ const InlayTokenEditableText = ({
   return (
     <span
       data-inlay-editable-region="true"
+      ref={forwardedRef}
       {...props}
       style={{
         display: 'inline-block',
@@ -1013,7 +1055,8 @@ const InlayTokenEditableText = ({
       {displayValue}
     </span>
   )
-}
+})
+
 InlayTokenEditableText.displayName = 'InlayTokenEditableText'
 
 export function createInlay<T>() {
