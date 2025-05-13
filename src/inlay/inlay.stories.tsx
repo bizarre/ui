@@ -98,7 +98,7 @@ export const Mentions = () => {
         }}
         value={value}
         className="flex items-center"
-        commitOnChars={[' ']}
+        commitOnChars={[' ', 'Enter']}
         displayCommitCharSpacer
         addNewTokenOnCommit
         insertSpacerOnCommit

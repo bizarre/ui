@@ -882,6 +882,105 @@ const _Inlay = <T,>(
   const rootClassName = `inlay-root-${uniqueId.replace(/:/g, '')}`
   const combinedClassName = [className, rootClassName].filter(Boolean).join(' ')
 
+  // Handle focus on the root element when there are no tokens
+  const onRootFocus = React.useCallback(() => {
+    // Only create a new token if there are no tokens and focus is on the root
+    if (tokens.length === 0 && document.activeElement === ref.current) {
+      console.log('[onRootFocus] Empty inlay focused, creating new token')
+
+      // Create a new empty token using the parseToken function
+      const emptyToken = memoizedParseToken('')
+
+      if (emptyToken !== null) {
+        // First, remove focus from the root to avoid visual issues with the caret
+        if (document.activeElement === ref.current) {
+          // Temporarily blur the root element
+          ;(document.activeElement as HTMLElement).blur()
+        }
+
+        // Update tokens state with the new empty token
+        setTokens([emptyToken])
+
+        // Wait for two animation frames - one for React to render, one for the browser to paint
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            // Find the newly created token element
+            const newTokenEl = ref.current?.querySelector('[data-token-id="0"]')
+
+            if (newTokenEl) {
+              // Find the editable region within the token
+              const editableRegion = newTokenEl.querySelector(
+                '[data-inlay-editable-region="true"]'
+              ) as HTMLElement | null
+
+              // Set activeTokenRef directly to help with focus visualization
+              activeTokenRef.current = newTokenEl as HTMLElement
+
+              // Create and set a selection range to ensure proper caret visualization
+              const range = document.createRange()
+              const sel = window.getSelection()
+
+              // Focus the editable region if it exists, otherwise the token itself
+              if (editableRegion && editableRegion.firstChild) {
+                // Focus the editable region
+                editableRegion.focus()
+
+                // Set cursor at beginning of content
+                if (sel) {
+                  if (editableRegion.firstChild.nodeType === Node.TEXT_NODE) {
+                    range.setStart(editableRegion.firstChild, 0)
+                    range.collapse(true)
+                    sel.removeAllRanges()
+                    sel.addRange(range)
+                  }
+                }
+              } else if (editableRegion) {
+                // Empty editable region with no text node
+                editableRegion.focus()
+
+                if (sel) {
+                  range.selectNodeContents(editableRegion)
+                  range.collapse(true)
+                  sel.removeAllRanges()
+                  sel.addRange(range)
+                }
+              } else {
+                // Fallback to focusing the token element itself
+                ;(newTokenEl as HTMLElement).focus()
+
+                if (sel && newTokenEl.firstChild) {
+                  range.selectNodeContents(newTokenEl)
+                  range.collapse(true)
+                  sel.removeAllRanges()
+                  sel.addRange(range)
+                }
+              }
+
+              // Update cursor state after focus and selection changes
+              savedCursorRef.current = { index: 0, offset: 0 }
+              if (!isSameCaret({ index: 0, offset: 0 }, caretState)) {
+                setCaretState({ index: 0, offset: 0 })
+              }
+
+              // Force a layout calculation to ensure proper rendering
+              newTokenEl.getBoundingClientRect()
+            }
+          })
+        })
+      }
+    }
+  }, [
+    tokens,
+    ref,
+    activeTokenRef,
+    memoizedParseToken,
+    setTokens,
+    savedCursorRef,
+    isSameCaret,
+    caretState,
+    setCaretState
+  ])
+
   return (
     <InlayProvider
       scope={__scope}
@@ -921,6 +1020,7 @@ const _Inlay = <T,>(
         onInput={onDivInput}
         onBeforeInput={onBeforeInputEventHanlder}
         onKeyDown={onKeyDownEventHandler}
+        onFocus={onRootFocus}
         ref={composeRefs(forwardedRef, ref)}
         style={{ ...style, position: 'relative' }}
         className={combinedClassName}
