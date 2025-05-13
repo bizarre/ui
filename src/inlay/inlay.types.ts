@@ -1,3 +1,5 @@
+import type { SelectAllState } from './hooks/useSelectionChangeHandler'
+
 export type Token<T> = {
   id: string
   value: T
@@ -177,3 +179,25 @@ export type InlayTokenProps = {
 
 // Caret (cursor) position type
 export type CaretPosition = { index: number; offset: number } | null
+
+// Operation type for history entries
+export type InlayOperationType =
+  | 'typing'
+  | 'paste'
+  | 'delete' // General delete
+  | 'commit' // Token committed by space/enter, or other commit actions
+  | 'token-add' // Explicit token addition (e.g. from a button)
+  | 'token-remove' // Explicit token removal
+  | 'token-update' // Explicit token update
+  | 'root-process' // Change from processing root div text
+  | 'unknown' // Default or truly unknown reason
+
+// History entry type for undo/redo
+export interface InlayHistoryEntry<T> {
+  tokens: Readonly<T[]>
+  spacerChars: Readonly<(string | null)[]>
+  caretState: Readonly<CaretPosition>
+  selectAllState: Readonly<SelectAllState>
+  operationType: InlayOperationType // Added operationType
+  timestamp: number // Added timestamp for coalescing logic
+}

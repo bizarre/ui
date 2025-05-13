@@ -6,12 +6,17 @@ import type {
   // OnInputContext, // Unused directly, but InlayProps uses it via onCharInput prop type
   InlayProps,
   OnInputGlobalActions,
-  TokenHandle
+  TokenHandle,
+  CaretPosition,
+  InlayOperationType
 } from '../inlay.types'
 import type { SelectAllState } from './useSelectionChangeHandler' // Import SelectAllState
 
 // Re-import OnInputContext specifically if needed for the onCharInput prop type directly
 import type { OnInputContext } from '../inlay.types'
+import type { UseInlayHistoryReturn } from './useInlayHistory' // Added
+
+const DEBUG_HISTORY = true // Control flag for logging
 
 export type UseKeydownHandlerProps<T> = {
   tokens: Readonly<T[]>
@@ -19,14 +24,8 @@ export type UseKeydownHandlerProps<T> = {
   spacerChars: (string | null)[]
   setSpacerChars: React.Dispatch<React.SetStateAction<(string | null)[]>>
   activeTokenRef: React.RefObject<HTMLElement | null>
-  savedCursorRef: React.MutableRefObject<{
-    index: number
-    offset: number
-  } | null>
-  programmaticCursorExpectationRef: React.MutableRefObject<{
-    index: number
-    offset: number
-  } | null>
+  savedCursorRef: React.MutableRefObject<CaretPosition | null>
+  programmaticCursorExpectationRef: React.MutableRefObject<CaretPosition | null>
   mainDivRef: React.RefObject<HTMLDivElement | null> // ref from _Inlay
   selectAllStateRef: React.MutableRefObject<SelectAllState> // Use SelectAllState here
 
@@ -34,9 +33,7 @@ export type UseKeydownHandlerProps<T> = {
   parseToken: (value: string) => T | null
   removeToken: (index: number) => void // This is the removeToken from _Inlay's scope
   saveCursor: () => void // This is the saveCursor from _Inlay's scope
-  restoreCursor: (
-    cursorToRestore?: { index: number; offset: number } | null
-  ) => void // Expose restoreCursor for programmatic focus
+  restoreCursor: (cursorToRestore?: CaretPosition | null) => void // Expose restoreCursor for programmatic focus
   onTokenFocus?: (index: number | null) => void
 
   // Props from InlayProps<T>
@@ -50,6 +47,12 @@ export type UseKeydownHandlerProps<T> = {
   // For retrieving EditableText values
   _getEditableTextValue: (index: number) => string | undefined
   forceImmediateRestoreRef: React.MutableRefObject<boolean>
+
+  // New props for history
+  history: UseInlayHistoryReturn<T>
+  isRestoringHistoryRef: React.MutableRefObject<boolean>
+  setCaretState: React.Dispatch<React.SetStateAction<CaretPosition | null>> // Added setter for caretState
+  lastOperationTypeRef: React.MutableRefObject<InlayOperationType>
 }
 
 export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
@@ -75,43 +78,55 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
     insertSpacerOnCommit,
     displayCommitCharSpacer,
     _getEditableTextValue,
-    forceImmediateRestoreRef
+    forceImmediateRestoreRef,
+    // New props for history
+    history, // Destructure
+    isRestoringHistoryRef, // Destructure
+    setCaretState, // Destructure
+    lastOperationTypeRef
   } = props
 
   // Helper function to get the meaningful string representation of a token
-  const getActualTextForToken = (
-    tok: T | undefined | null,
-    tokenIndex: number
-  ): string => {
-    if (tok === undefined || tok === null) return ''
+  const getActualTextForToken = React.useCallback(
+    (tok: T | undefined | null, tokenIndex: number): string => {
+      if (tok === undefined || tok === null) return ''
 
-    // First, try to get value from registered EditableText components via context
-    const registeredValue = _getEditableTextValue(tokenIndex)
-    if (registeredValue !== undefined) {
-      return registeredValue // This is the most reliable source
-    }
+      // First, try to get value from registered EditableText components via context
+      const registeredValue = _getEditableTextValue(tokenIndex)
+      if (registeredValue !== undefined) {
+        return registeredValue // This is the most reliable source
+      }
 
-    // Fallback if not registered
-    if (typeof tok === 'string') {
-      return tok
-    }
+      // Fallback if not registered
+      if (typeof tok === 'string') {
+        return tok
+      }
 
-    // For objects not using EditableText or not yet registered
-    if (typeof tok === 'object') {
-      console.warn(
-        `[getActualTextForToken] Token at index ${tokenIndex} is an object but has no registered EditableText value. Returning empty string.`,
-        tok
-      )
-      return ''
-    }
-    return '' // Should not be reached if tok is string or object
-  }
+      // For objects not using EditableText or not yet registered
+      if (typeof tok === 'object') {
+        console.warn(
+          `[getActualTextForToken] Token at index ${tokenIndex} is an object but has no registered EditableText value. Returning empty string.`,
+          tok
+        )
+        return ''
+      }
+      return '' // Should not be reached if tok is string or object
+    },
+    [_getEditableTextValue]
+  )
 
   const handleRemoveTokenOnKeyDownInternal = React.useCallback(
     (
       e: React.KeyboardEvent<HTMLDivElement>,
       selectAllState: SelectAllState
     ) => {
+      const originalPreventDefault = e.preventDefault.bind(e)
+      let deletionHappened = false
+      e.preventDefault = () => {
+        deletionHappened = true
+        originalPreventDefault()
+      }
+
       if (e.key !== 'Backspace' && e.key !== 'Delete') return
       console.log('[KeydownHandler] handleRemoveTokenOnKeyDownInternal ENTRY', {
         key: e.key,
@@ -352,6 +367,10 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
         console.log(
           '[KeydownHandler] Cross-token deletion COMPLETE. selectAllStateRef reset to none.'
         )
+
+        if (deletionHappened) {
+          lastOperationTypeRef.current = 'delete'
+        }
         return
       }
       console.log(
@@ -819,6 +838,10 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
         }
         return
       }
+
+      if (deletionHappened) {
+        lastOperationTypeRef.current = 'delete'
+      }
     },
     [
       tokens,
@@ -833,7 +856,8 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       onTokenFocus,
       saveCursor,
       restoreCursor,
-      forceImmediateRestoreRef
+      forceImmediateRestoreRef,
+      lastOperationTypeRef
     ]
   )
 
@@ -843,6 +867,111 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       const setPreventDefaultFlag = () => {
         preventDefaultCalledByOnCharInput = true
       }
+
+      // --- UNDO/REDO LOGIC --- START ---
+      const isUndo =
+        (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z'
+      const isRedo =
+        (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z'
+
+      if (isUndo) {
+        e.preventDefault()
+        if (DEBUG_HISTORY)
+          console.log(
+            '[KeydownHandler] UNDO triggered. Can undo:',
+            history.canUndo
+          )
+        if (history.canUndo) {
+          isRestoringHistoryRef.current = true
+          if (DEBUG_HISTORY)
+            console.log(
+              '[KeydownHandler] UNDO: isRestoringHistoryRef set to true'
+            )
+          const restored = history.undo()
+          if (DEBUG_HISTORY)
+            console.log(
+              '[KeydownHandler] UNDO: history.undo() returned:',
+              restored ? JSON.parse(JSON.stringify(restored)) : null
+            )
+          if (restored) {
+            setTokens(restored.tokens as T[])
+            setSpacerChars(restored.spacerChars as (string | null)[])
+            setCaretState(restored.caretState as CaretPosition | null)
+            selectAllStateRef.current = restored.selectAllState
+
+            savedCursorRef.current = restored.caretState
+            programmaticCursorExpectationRef.current = restored.caretState
+            forceImmediateRestoreRef.current = true
+            if (DEBUG_HISTORY)
+              console.log(
+                '[KeydownHandler] UNDO: Applied restored state. forceImmediateRestoreRef set to true.'
+              )
+
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                isRestoringHistoryRef.current = false
+                if (DEBUG_HISTORY)
+                  console.log(
+                    '[KeydownHandler] UNDO: isRestoringHistoryRef set to false (after rAFs)'
+                  )
+              })
+            })
+          }
+        } else {
+          isRestoringHistoryRef.current = false
+        }
+        return
+      }
+
+      if (isRedo) {
+        e.preventDefault()
+        if (DEBUG_HISTORY)
+          console.log(
+            '[KeydownHandler] REDO triggered. Can redo:',
+            history.canRedo
+          )
+        if (history.canRedo) {
+          isRestoringHistoryRef.current = true
+          if (DEBUG_HISTORY)
+            console.log(
+              '[KeydownHandler] REDO: isRestoringHistoryRef set to true'
+            )
+          const restored = history.redo()
+          if (DEBUG_HISTORY)
+            console.log(
+              '[KeydownHandler] REDO: history.redo() returned:',
+              restored ? JSON.parse(JSON.stringify(restored)) : null
+            )
+          if (restored) {
+            setTokens(restored.tokens as T[])
+            setSpacerChars(restored.spacerChars as (string | null)[])
+            setCaretState(restored.caretState as CaretPosition | null)
+            selectAllStateRef.current = restored.selectAllState
+
+            savedCursorRef.current = restored.caretState
+            programmaticCursorExpectationRef.current = restored.caretState
+            forceImmediateRestoreRef.current = true
+            if (DEBUG_HISTORY)
+              console.log(
+                '[KeydownHandler] REDO: Applied restored state. forceImmediateRestoreRef set to true.'
+              )
+
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                isRestoringHistoryRef.current = false
+                if (DEBUG_HISTORY)
+                  console.log(
+                    '[KeydownHandler] REDO: isRestoringHistoryRef set to false (after rAFs)'
+                  )
+              })
+            })
+          }
+        } else {
+          isRestoringHistoryRef.current = false
+        }
+        return
+      }
+      // --- UNDO/REDO LOGIC --- END ---
 
       if (onCharInput && (e.key.length === 1 || e.key === 'Enter')) {
         let tokenHandleForContext: TokenHandle<T> | null = null
@@ -1132,6 +1261,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
         if (
           activeTokenRef.current?.getAttribute('data-token-editable') === 'true'
         ) {
+          lastOperationTypeRef.current = 'commit'
           e.preventDefault()
           const activeTokenElement = activeTokenRef.current
           const activeIndex = parseInt(
@@ -1346,7 +1476,12 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       displayCommitCharSpacer,
       _getEditableTextValue,
       handleRemoveTokenOnKeyDownInternal,
-      forceImmediateRestoreRef
+      forceImmediateRestoreRef,
+      // New props for history
+      history, // Destructure
+      isRestoringHistoryRef, // Destructure
+      setCaretState, // Destructure
+      lastOperationTypeRef
     ]
   )
 

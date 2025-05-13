@@ -1,5 +1,9 @@
 import * as React from 'react'
-import type { InlayProps } from '../inlay.types'
+import type {
+  InlayProps,
+  InlayOperationType,
+  CaretPosition
+} from '../inlay.types'
 import type { SelectAllState } from './useSelectionChangeHandler'
 // import { ZWS } from '../inlay.constants'; // ZWS seems no longer used directly in this file
 import { calculateOffsetInTextProvider } from '../utils/domNavigationUtils'
@@ -143,14 +147,8 @@ export interface UsePasteHandlerProps<T> {
   spacerChars: (string | null)[]
   setSpacerChars: React.Dispatch<React.SetStateAction<(string | null)[]>>
   activeTokenRef: React.RefObject<HTMLElement | null>
-  savedCursorRef: React.MutableRefObject<{
-    index: number
-    offset: number
-  } | null>
-  programmaticCursorExpectationRef: React.MutableRefObject<{
-    index: number
-    offset: number
-  } | null>
+  savedCursorRef: React.MutableRefObject<CaretPosition | null>
+  programmaticCursorExpectationRef: React.MutableRefObject<CaretPosition | null>
   selectAllStateRef: React.MutableRefObject<SelectAllState>
 
   parseToken: (value: string) => T | null
@@ -166,6 +164,7 @@ export interface UsePasteHandlerProps<T> {
   insertSpacerOnCommit: boolean
   displayCommitCharSpacer?: InlayProps<T>['displayCommitCharSpacer']
   forceImmediateRestoreRef: React.MutableRefObject<boolean>
+  lastOperationTypeRef: React.MutableRefObject<InlayOperationType>
 }
 
 export function usePasteHandler<T>(props: UsePasteHandlerProps<T>): void {
@@ -186,7 +185,8 @@ export function usePasteHandler<T>(props: UsePasteHandlerProps<T>): void {
     defaultNewTokenValue,
     addNewTokenOnCommit,
     insertSpacerOnCommit,
-    forceImmediateRestoreRef
+    forceImmediateRestoreRef,
+    lastOperationTypeRef
   } = props
 
   React.useEffect(() => {
@@ -722,6 +722,8 @@ export function usePasteHandler<T>(props: UsePasteHandlerProps<T>): void {
 
       forceImmediateRestoreRef.current = true
       console.log('[usePasteHandler] Paste handling COMPLETE.')
+
+      lastOperationTypeRef.current = 'paste'
     }
 
     mainDiv.addEventListener('paste', handlePaste)
@@ -745,6 +747,7 @@ export function usePasteHandler<T>(props: UsePasteHandlerProps<T>): void {
     defaultNewTokenValue,
     addNewTokenOnCommit,
     insertSpacerOnCommit,
-    forceImmediateRestoreRef
+    forceImmediateRestoreRef,
+    lastOperationTypeRef
   ])
 }

@@ -8,7 +8,10 @@ import { COMPONENT_NAME, ZWS } from './inlay.constants'
 import type {
   InlayContextValue,
   InlayProps,
-  InlayTokenProps
+  InlayTokenProps,
+  CaretPosition,
+  InlayHistoryEntry,
+  InlayOperationType
 } from './inlay.types'
 import { useBeforeInputHandler } from './hooks/useBeforeInputHandler'
 import { useKeydownHandler } from './hooks/useKeydownHandler'
@@ -22,6 +25,9 @@ import { useMemoizedCallback } from './hooks/useMemoizedCallback'
 import { useCopyHandler } from './hooks/useCopyHandler'
 import { usePasteHandler } from './hooks/usePasteHandler'
 import { useCustomSelectionDrawing } from './hooks/useCustomSelectionDrawing'
+import { useInlayHistory } from './hooks/useInlayHistory'
+
+const DEBUG_HISTORY = true
 
 const [createInlayContext] = createContextScope(COMPONENT_NAME)
 
@@ -80,17 +86,19 @@ const _Inlay = <T,>(
   const domKeyRef = React.useRef(0)
   const prevDomKeyValueRef = React.useRef(domKeyRef.current)
   const selectAllStateRef = React.useRef<SelectAllState>('none')
-  const programmaticCursorExpectationRef = React.useRef<{
-    index: number
-    offset: number
-  } | null>(null)
+  const programmaticCursorExpectationRef = React.useRef<CaretPosition | null>(
+    null
+  )
   const forceImmediateRestoreRef = React.useRef(false)
   const [spacerChars, setSpacerChars] = React.useState<(string | null)[]>([])
 
-  // For EditableText integration: Map of tokenIndex -> string value
   const editableTextValuesRef = React.useRef<{
     [index: number]: string | undefined
   }>({})
+
+  const inlayHistory = useInlayHistory<T>()
+  const isRestoringHistoryRef = React.useRef(false)
+  const lastOperationTypeRef = React.useRef<InlayOperationType>('unknown')
 
   const _registerEditableTextValue = React.useCallback(
     (index: number, text: string | null) => {
@@ -99,7 +107,6 @@ const _Inlay = <T,>(
       } else {
         editableTextValuesRef.current[index] = text
       }
-      // console.log('[_registerEditableTextValue] Updated map:', index, text, editableTextValuesRef.current);
     },
     []
   )
@@ -111,44 +118,28 @@ const _Inlay = <T,>(
     []
   )
 
-  console.log('activeTokenRef', activeTokenRef.current)
-  console.log(
-    '[_Inlay] Rendering with spacerChars:',
-    spacerChars,
-    'tokens:',
-    tokensProp?.length
-  )
-
   const [tokens, setTokens] = useControllableState({
     prop: tokensProp,
     defaultProp: defaultTokens ?? [],
     onChange: memoizedOnTokensChange
   })
 
-  // Controlled / uncontrolled caret (cursor) state
-  type Caret = { index: number; offset: number } | null
+  const [caretState, setCaretState] =
+    useControllableState<CaretPosition | null>({
+      prop: caretProp as CaretPosition | undefined,
+      defaultProp: (defaultCaret ?? null) as CaretPosition | null,
+      onChange: onCaretChange
+    })
 
-  const [caretState, setCaretState] = useControllableState<Caret>({
-    prop: caretProp as Caret | undefined,
-    defaultProp: (defaultCaret ?? null) as Caret,
-    onChange: onCaretChange
-  })
-
-  // Helper for shallow equality of caret objects
-  const isSameCaret = React.useCallback((a: Caret, b: Caret) => {
-    if (a === b) return true
-    if (a === null || b === null) return false
-    return a.index === b.index && a.offset === b.offset
-  }, [])
-
-  console.log(
-    '[_Inlay] Rendering. spacerChars:',
-    spacerChars,
-    'internal tokens length:',
-    tokens.length
+  const isSameCaret = React.useCallback(
+    (a: CaretPosition | null, b: CaretPosition | null) => {
+      if (a === b) return true
+      if (a === null || b === null) return false
+      return a.index === b.index && a.offset === b.offset
+    },
+    []
   )
 
-  // Define renderSpacer function based on the prop
   const renderSpacer = React.useCallback(
     (commitChar: string, afterTokenIndex: number): React.ReactNode => {
       if (typeof memoizedDisplayCommitCharSpacer === 'function') {
@@ -166,38 +157,61 @@ const _Inlay = <T,>(
           </span>
         )
       }
-      return null // If displayCommitCharSpacer is false or undefined
+      return null
     },
     [memoizedDisplayCommitCharSpacer]
   )
 
-  // Effect to keep spacerCharsListRef in sync with tokens length
   React.useEffect(() => {
-    const expectedSpacerCount = Math.max(0, tokens.length - 1)
-    if (spacerChars.length !== expectedSpacerCount) {
-      const newSpacers = Array(expectedSpacerCount).fill(null)
-      // Preserve existing spacers if possible when resizing
-      for (
-        let i = 0;
-        i < Math.min(spacerChars.length, expectedSpacerCount);
-        i++
-      ) {
-        newSpacers[i] = spacerChars[i]
-      }
-      setSpacerChars(newSpacers)
+    if (isRestoringHistoryRef.current) {
+      if (DEBUG_HISTORY)
+        console.log(
+          '[_Inlay SpacerEffect] Skipping spacer adjustment due to history restoration.'
+        )
+      return
     }
-  }, [tokens.length, spacerChars, setSpacerChars])
+    const expectedSpacerCount = Math.max(0, tokens.length - 1)
 
-  const savedCursorRef = React.useRef<{
-    index: number
-    offset: number
-  } | null>(null)
+    const isTrailingNullState =
+      spacerChars.length === expectedSpacerCount + 1 &&
+      spacerChars[spacerChars.length - 1] === null
+
+    if (spacerChars.length !== expectedSpacerCount) {
+      if (isTrailingNullState) {
+        if (DEBUG_HISTORY)
+          console.log(
+            '[_Inlay SpacerEffect] spacerChars length is expected+1 with trailing null. No adjustment needed. Current:',
+            spacerChars
+          )
+      } else {
+        if (DEBUG_HISTORY)
+          console.log(
+            '[_Inlay SpacerEffect] Adjusting spacers due to unexpected length. Current:',
+            spacerChars,
+            'Expected count:',
+            expectedSpacerCount,
+            'Based on tokens length:',
+            tokens.length
+          )
+        const newSpacers = Array(expectedSpacerCount).fill(null)
+        for (
+          let i = 0;
+          i < Math.min(spacerChars.length, expectedSpacerCount);
+          i++
+        ) {
+          newSpacers[i] = spacerChars[i]
+        }
+        setSpacerChars(newSpacers)
+      }
+    }
+  }, [tokens.length, spacerChars, setSpacerChars, isRestoringHistoryRef])
+
+  const savedCursorRef = React.useRef<CaretPosition | null>(null)
 
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
   const [desiredLineHeight, setDesiredLineHeight] = React.useState(20)
   const uniqueId = React.useId()
 
-  // Instantiate the custom selection drawing hook
   const highlightRects = useCustomSelectionDrawing<T>({
     mainDivRef: ref,
     isEnabled: enableCustomSelectionDrawing,
@@ -206,30 +220,22 @@ const _Inlay = <T,>(
     _getEditableTextValue: _getEditableTextValue
   })
 
-  // Effect to measure and cache the desiredLineHeight from the Inlay.Root
   React.useLayoutEffect(() => {
     if (ref.current) {
       const computedStyle = window.getComputedStyle(ref.current)
       const lh = parseFloat(computedStyle.lineHeight)
       if (!isNaN(lh) && lh > 0) {
         setDesiredLineHeight(lh)
-        console.log('[_Inlay] Measured desiredLineHeight:', lh)
       } else if (computedStyle.lineHeight === 'normal') {
-        // Estimate for 'normal' based on font size
         const fontSize = parseFloat(computedStyle.fontSize)
         if (!isNaN(fontSize)) {
-          const estimatedLh = Math.round(fontSize * 1.2) // Common heuristic for 'normal'
+          const estimatedLh = Math.round(fontSize * 1.2)
           setDesiredLineHeight(estimatedLh)
-          console.log(
-            '[_Inlay] Estimated desiredLineHeight for "normal":',
-            estimatedLh
-          )
         }
       }
     }
   }, [])
 
-  // Effect to draw selection highlights on the canvas
   React.useEffect(() => {
     const canvas = canvasRef.current
     const mainDiv = ref.current
@@ -249,13 +255,122 @@ const _Inlay = <T,>(
 
     ctx.clearRect(0, 0, inlayRect.width, inlayRect.height)
 
-    // TODO: Make selection color configurable via props or CSS variables
-    ctx.fillStyle = 'rgba(0, 120, 215, 0.3)' // Example selection color
+    ctx.fillStyle = 'rgba(0, 120, 215, 0.3)'
 
     highlightRects.forEach((rect) => {
       ctx.fillRect(rect.x, rect.y, rect.width, desiredLineHeight)
     })
   }, [highlightRects, desiredLineHeight, ref, canvasRef])
+
+  React.useEffect(() => {
+    const initialSpacers = Array(Math.max(0, tokens.length - 1)).fill(null)
+    inlayHistory.initializePresent({
+      tokens: tokens,
+      spacerChars: initialSpacers,
+      caretState: caretState,
+      selectAllState: selectAllStateRef.current
+    })
+  }, [])
+
+  React.useEffect(() => {
+    if (DEBUG_HISTORY) {
+      console.log(
+        '[_Inlay History Record] Effect triggered. isRestoring:',
+        isRestoringHistoryRef.current,
+        'lastOpRef:',
+        lastOperationTypeRef.current
+      )
+    }
+    if (isRestoringHistoryRef.current) {
+      if (DEBUG_HISTORY) {
+        console.log(
+          '[_Inlay History Record] Skipping: isRestoringHistoryRef is true.'
+        )
+      }
+      return
+    }
+
+    const effectiveCaretForSnapshot =
+      savedCursorRef.current !== null ? savedCursorRef.current : caretState
+
+    if (DEBUG_HISTORY && effectiveCaretForSnapshot !== caretState) {
+      console.log(
+        '[_Inlay History Record] Using savedCursorRef for snapshot. savedCursorRef:',
+        savedCursorRef.current,
+        'Original caretState from state:',
+        caretState
+      )
+    }
+
+    let operationForSnapshot = lastOperationTypeRef.current
+    const previousHistoryEntryData = inlayHistory.getPresentEntryData()
+
+    if (operationForSnapshot === 'unknown' && previousHistoryEntryData) {
+      const currentComponentStateData = {
+        tokens: tokens,
+        spacerChars: spacerChars,
+        caretState: effectiveCaretForSnapshot,
+        selectAllState: selectAllStateRef.current
+      }
+      const previousHistoryDataForComparison = {
+        tokens: previousHistoryEntryData.tokens,
+        spacerChars: previousHistoryEntryData.spacerChars,
+        caretState: previousHistoryEntryData.caretState,
+        selectAllState: previousHistoryEntryData.selectAllState
+      }
+
+      if (
+        JSON.stringify(currentComponentStateData) !==
+        JSON.stringify(previousHistoryDataForComparison)
+      ) {
+        if (DEBUG_HISTORY) {
+          console.log(
+            "[_Inlay History Record] lastOpRef was unknown, but current data differs from history. Assuming 'typing'."
+          )
+        }
+        operationForSnapshot = 'typing'
+      } else {
+        if (DEBUG_HISTORY) {
+          console.log(
+            '[_Inlay History Record] lastOpRef was unknown, and current data matches history. Keeping op as unknown for snapshot.'
+          )
+        }
+      }
+    }
+
+    const snapshotDataForSetPresent: Omit<InlayHistoryEntry<T>, 'timestamp'> = {
+      tokens: tokens,
+      spacerChars: spacerChars,
+      caretState: effectiveCaretForSnapshot,
+      selectAllState: selectAllStateRef.current,
+      operationType: operationForSnapshot
+    }
+
+    if (DEBUG_HISTORY) {
+      console.log(
+        '[_Inlay History Record] Attempting to record snapshot with opType:',
+        operationForSnapshot,
+        JSON.parse(JSON.stringify(snapshotDataForSetPresent))
+      )
+    }
+    const historyWasUpdated = inlayHistory.setPresent(snapshotDataForSetPresent)
+
+    if (historyWasUpdated) {
+      if (DEBUG_HISTORY) {
+        console.log(
+          '[_Inlay History Record] History was updated by setPresent. Resetting lastOperationTypeRef to unknown.'
+        )
+      }
+      lastOperationTypeRef.current = 'unknown'
+    } else {
+      if (DEBUG_HISTORY) {
+        console.log(
+          '[_Inlay History Record] History was NOT updated by setPresent. lastOperationTypeRef remains:',
+          lastOperationTypeRef.current
+        )
+      }
+    }
+  }, [tokens, spacerChars, caretState, savedCursorRef, inlayHistory])
 
   useSelectionChangeHandler({
     mainDivRef: ref,
@@ -288,20 +403,11 @@ const _Inlay = <T,>(
             '[data-token-id]'
           ) as HTMLElement | null)
 
-    console.log(
-      '[saveCursor] Found tokenEl:',
-      tokenEl?.dataset?.tokenId,
-      'container:',
-      container,
-      'offset:',
-      offset
-    )
-
     if (tokenEl) {
       const tokenIdStr = tokenEl.getAttribute('data-token-id')
       if (tokenIdStr) {
         const tokenIndex = parseInt(tokenIdStr)
-        let finalOffset = offset // Default to the raw offset from selection
+        let finalOffset = offset
 
         const editableRegion = tokenEl.querySelector(
           '[data-inlay-editable-region="true"]'
@@ -313,9 +419,6 @@ const _Inlay = <T,>(
             container === editableRegion ||
             editableRegion.contains(container)
           ) {
-            // Selection is within or on the editable region itself
-            // The `offset` from `sel.getRangeAt(0)` is already relative to the container (e.g., TextNode within editableRegion)
-            // Ensure it's clamped to the actual text length of the region
             finalOffset = Math.min(
               offset,
               (editableRegion.firstChild?.textContent || '').length
@@ -326,31 +429,23 @@ const _Inlay = <T,>(
             )
               finalOffset = 0
           } else if (container === tokenEl) {
-            // Selection is on the main token element, but an editable region exists
-            // Default to offset 0 within the editable region if it's empty (showing ZWS),
-            // or end of text if it has content (though focus should ideally be inside)
             finalOffset =
               editableRegionText === ZWS ? 0 : editableRegionText.length
           } else {
-            // Selection is outside tokenEl or editableRegion (should not happen if tokenEl is the closest)
-            // Or, container is some other child of tokenEl not in editableRegion. Fallback.
             finalOffset =
               editableRegionText === ZWS ? 0 : editableRegionText.length
           }
         } else {
-          // No editable region, it's a simple token (e.g. just text content in tokenEl)
           if (container === tokenEl) {
             finalOffset = (tokenEl.textContent || '').length
           } else if (tokenEl.contains(container)) {
-            // Ensure offset is clamped if container is a text node inside tokenEl
             finalOffset = Math.min(offset, (container.textContent || '').length)
           } else {
-            // Fallback for simple token if selection is weirdly outside
             finalOffset = (tokenEl.textContent || '').length
           }
         }
 
-        const newCaret = {
+        const newCaret: CaretPosition = {
           index: tokenIndex,
           offset: finalOffset
         }
@@ -358,7 +453,6 @@ const _Inlay = <T,>(
         if (!isSameCaret(newCaret, caretState)) {
           setCaretState(newCaret)
         }
-        console.log('[saveCursor] Saved:', savedCursorRef.current)
         return
       }
     }
@@ -368,11 +462,10 @@ const _Inlay = <T,>(
         setCaretState(null)
       }
     }
-    console.log('[saveCursor] Cleared saved cursor (no tokenEl or tokenId)')
   }, [caretState, isSameCaret, setCaretState])
 
   const restoreCursor = React.useCallback(
-    (cursorToRestore?: { index: number; offset: number } | null) => {
+    (cursorToRestore?: CaretPosition | null) => {
       const sel = window.getSelection()
       if (!sel || !ref.current) return
 
@@ -390,7 +483,6 @@ const _Inlay = <T,>(
       let targetNodeForCursor: Node | null = null
       let effectiveOffset = saved.offset
 
-      // Try to find the designated editable text container
       const editableRegion = element.querySelector(
         '[data-inlay-editable-region="true"]'
       ) as HTMLElement | null
@@ -404,13 +496,9 @@ const _Inlay = <T,>(
           targetNodeForCursor = editableRegion.firstChild
           effectiveOffset = Math.min(saved.offset, regionTextContent.length)
         } else if (regionTextContent === '' && saved.offset === 0) {
-          // Empty editable region, collapse to the region itself
           targetNodeForCursor = editableRegion
           effectiveOffset = 0
         } else {
-          console.warn(
-            '[restoreCursor] Editable text region found, but it does not contain a direct text node or is not empty as expected. Collapsing to region start.'
-          )
           targetNodeForCursor = editableRegion
           effectiveOffset = 0
         }
@@ -418,21 +506,15 @@ const _Inlay = <T,>(
         element.firstChild &&
         element.firstChild.nodeType === Node.TEXT_NODE
       ) {
-        // Original logic for simple string tokens (direct text node child of the token span)
         targetNodeForCursor = element.firstChild
         effectiveOffset = Math.min(
           saved.offset,
           (element.firstChild.textContent || '').length
         )
       } else if (textContent === '' && saved.offset === 0) {
-        // Handle completely empty token (no specific region, no text)
         targetNodeForCursor = element
         effectiveOffset = 0
       } else {
-        // Last resort: collapse to the start of the main token element
-        console.warn(
-          '[restoreCursor] Complex token without a designated editable region or direct text node. Collapsing to start of token element.'
-        )
         targetNodeForCursor = element
         effectiveOffset = 0
       }
@@ -443,15 +525,9 @@ const _Inlay = <T,>(
             range.setStart(targetNodeForCursor, effectiveOffset)
             range.collapse(true)
           } else if (targetNodeForCursor.nodeType === Node.ELEMENT_NODE) {
-            // If it's an element (e.g., empty editableRegion or empty token element),
-            // select its contents and collapse to the start. This is suitable for making it focusable.
             range.selectNodeContents(targetNodeForCursor)
             range.collapse(true)
           } else {
-            // Should not happen with the logic above
-            console.error(
-              '[restoreCursor] Target node is not Text or Element. Cannot set range.'
-            )
             return
           }
           sel.removeAllRanges()
@@ -464,10 +540,7 @@ const _Inlay = <T,>(
           })
         }
       } else {
-        console.error(
-          '[restoreCursor] Could not determine a target node for cursor placement.'
-        )
-        return // Exit if no target node determined
+        return
       }
 
       if (sel.rangeCount > 0) {
@@ -486,6 +559,9 @@ const _Inlay = <T,>(
   )
 
   const onDivInput = React.useCallback(() => {
+    lastOperationTypeRef.current = 'unknown'
+    saveCursor()
+
     const currentSelectionForLog = window.getSelection()
     console.log(
       '[onInput PRE-START] Raw document.activeElement:',
@@ -527,7 +603,6 @@ const _Inlay = <T,>(
           parentElement.closest('[data-token-id]')
       }
     }
-    saveCursor()
 
     requestAnimationFrame(() => {
       let elementToProcess = initiallySelectedTokenElementForRAF
@@ -539,22 +614,9 @@ const _Inlay = <T,>(
         document.activeElement === ref.current
       ) {
         if (elementToProcess !== activeTokenRef.current) {
-          console.log(
-            '[onInput rAF] Overriding elementToProcess. Was:',
-            elementToProcess?.dataset.tokenId,
-            'Now (from activeTokenRef):',
-            activeTokenRef.current.dataset.tokenId
-          )
           elementToProcess = activeTokenRef.current
         }
       }
-
-      console.log(
-        '[onInput rAF] Started. Actual processing target (from post-input selection):',
-        elementToProcess?.dataset?.tokenId,
-        'Current activeTokenRef (from selectionchange event):',
-        activeTokenRef.current?.dataset?.tokenId
-      )
 
       let newTokensToSet: T[] | null = null
 
@@ -563,14 +625,6 @@ const _Inlay = <T,>(
         const activeIndex = parseInt(activeTokenId)
         const rawDomTextContent = elementToProcess.textContent || ''
         const textToParse = rawDomTextContent === ZWS ? '' : rawDomTextContent
-        console.log(
-          '[onInput rAF] Processing active element. TokenId:',
-          activeTokenId,
-          'RawText:',
-          JSON.stringify(rawDomTextContent),
-          'ParsedText:',
-          JSON.stringify(textToParse)
-        )
         const newActiveTokenValue = parseToken(textToParse)
 
         if (newActiveTokenValue !== null) {
@@ -583,9 +637,6 @@ const _Inlay = <T,>(
             newTokens[activeIndex] = newActiveTokenValue
             newTokensToSet = newTokens
           } else if (activeIndex >= tokens.length && newActiveTokenValue) {
-            console.warn(
-              '[onInput rAF] Active element index out of bounds, but value exists. This case needs review.'
-            )
             if (tokens.length === 0 && activeIndex === 0) {
               newTokensToSet = [newActiveTokenValue]
             }
@@ -615,12 +666,6 @@ const _Inlay = <T,>(
       } else {
         const wholeText = ref.current?.textContent || ''
         const textToParseForRoot = wholeText === ZWS ? '' : wholeText
-        console.log(
-          '[onInput rAF] No active elementToProcess or not a data token. Processing root. RawRootText:',
-          JSON.stringify(wholeText),
-          'ParsedRootText:',
-          JSON.stringify(textToParseForRoot)
-        )
         newTokensToSet = processRootText(
           textToParseForRoot,
           tokens,
@@ -629,12 +674,6 @@ const _Inlay = <T,>(
         )
       }
 
-      console.log(
-        '[onInput rAF] Determined newTokensToSet:',
-        newTokensToSet ? JSON.parse(JSON.stringify(newTokensToSet)) : null,
-        'Current tokens state was:',
-        JSON.parse(JSON.stringify(tokens))
-      )
       if (newTokensToSet !== null) {
         setTokens(newTokensToSet)
       }
@@ -673,8 +712,6 @@ const _Inlay = <T,>(
 
   const removeTokenScoped = React.useCallback(
     (index: number) => {
-      console.log('removeTokenScoped', index)
-
       const currentActiveTokenId =
         activeTokenRef.current?.getAttribute('data-token-id')
       let nextCursorIndex: number | null = null
@@ -701,36 +738,35 @@ const _Inlay = <T,>(
         if (index < 0 || index >= prev.length) return prev
         const newTokens = prev.filter((_, i) => i !== index)
 
-        // Update spacerCharsListRef as well
-        const newSpacerCharsList = spacerChars.filter((_, i) => i !== index)
+        const newSpacerCharsList = spacerChars.filter((_, i) => {
+          if (index < spacerChars.length) {
+            return i !== index
+          } else if (
+            index > 0 &&
+            index === prev.length - 1 &&
+            i === index - 1
+          ) {
+            return false
+          }
+          return true
+        })
         setSpacerChars(newSpacerCharsList)
 
-        // Helper function to get the string representation for offset calculation
         const getTokenStringForOffset = (
           tok: T,
           tokenIndex: number
         ): string => {
-          // First, try to get value from registered EditableText components
           const registeredValue = _getEditableTextValue(tokenIndex)
           if (registeredValue !== undefined) {
-            return registeredValue // This is the most reliable source if available
+            return registeredValue
           }
-
-          // Fallback if not registered (e.g., simple string token or complex token not using EditableText)
           if (typeof tok === 'string') {
             return tok
           }
           if (tok && typeof tok === 'object') {
-            // This object case without a registered EditableText value is inherently ambiguous.
-            // Previously, we tried to guess based on 'username'.
-            // Now, it's better to warn and return empty, or rely on a user-provided general stringifier if we had one.
-            console.warn(
-              `[getTokenStringForOffset] Token at index ${tokenIndex} is an object but has no registered EditableText value. Returning empty string.`,
-              tok
-            )
-            return '' // Default for unhandled objects without registered EditableText
+            return ''
           }
-          return '' // Default for null/undefined tokens
+          return ''
         }
 
         if (
@@ -741,14 +777,14 @@ const _Inlay = <T,>(
           savedCursorRef.current = {
             index: nextCursorIndex,
             offset: getTokenStringForOffset(
-              newTokens[nextCursorIndex], // Used newTokens
+              newTokens[nextCursorIndex],
               nextCursorIndex
             ).length
           }
-          programmaticCursorExpectationRef.current = savedCursorRef.current // Added
+          programmaticCursorExpectationRef.current = savedCursorRef.current
         } else if (newTokens.length === 0) {
           savedCursorRef.current = null
-          programmaticCursorExpectationRef.current = null // Added
+          programmaticCursorExpectationRef.current = null
         } else if (
           newTokens.length > 0 &&
           (nextCursorIndex === null || nextCursorIndex >= newTokens.length)
@@ -756,16 +792,9 @@ const _Inlay = <T,>(
           const lastIdx = newTokens.length - 1
           savedCursorRef.current = {
             index: lastIdx,
-            offset: getTokenStringForOffset(
-              newTokens[lastIdx], // Already using newTokens here, which is good
-              lastIdx
-            ).length
+            offset: getTokenStringForOffset(newTokens[lastIdx], lastIdx).length
           }
-          programmaticCursorExpectationRef.current = savedCursorRef.current // Added
-        }
-
-        if (JSON.stringify(newTokens) !== JSON.stringify(prev)) {
-          // domKeyRef.current += 1 // INTENTIONALLY REMOVED
+          programmaticCursorExpectationRef.current = savedCursorRef.current
         }
         return newTokens
       })
@@ -776,9 +805,9 @@ const _Inlay = <T,>(
       setTokens,
       spacerChars,
       setSpacerChars,
-      _getEditableTextValue, // Added _getEditableTextValue to dependencies
-      activeTokenRef, // Added activeTokenRef
-      programmaticCursorExpectationRef // Added programmaticCursorExpectationRef
+      _getEditableTextValue,
+      activeTokenRef,
+      programmaticCursorExpectationRef
     ]
   )
 
@@ -795,7 +824,6 @@ const _Inlay = <T,>(
     forceImmediateRestoreRef
   })
 
-  // Call the useBeforeInputHandler hook
   const onBeforeInputEventHanlder = useBeforeInputHandler<T>({
     tokens,
     activeTokenRef,
@@ -805,10 +833,10 @@ const _Inlay = <T,>(
     mainDivRef: ref,
     spacerChars,
     setSpacerChars,
-    programmaticCursorExpectationRef
+    programmaticCursorExpectationRef,
+    lastOperationTypeRef
   })
 
-  // Call the new useKeydownHandler hook
   const onKeyDownEventHandler = useKeydownHandler<T>({
     tokens,
     setTokens,
@@ -831,10 +859,13 @@ const _Inlay = <T,>(
     displayCommitCharSpacer: memoizedDisplayCommitCharSpacer,
     _getEditableTextValue,
     forceImmediateRestoreRef,
-    restoreCursor
+    restoreCursor,
+    history: inlayHistory,
+    isRestoringHistoryRef,
+    setCaretState,
+    lastOperationTypeRef
   })
 
-  // Call the useCopyHandler hook
   useCopyHandler<T>({
     mainDivRef: ref,
     tokens,
@@ -842,7 +873,6 @@ const _Inlay = <T,>(
     _getEditableTextValue
   })
 
-  // Call the usePasteHandler hook
   usePasteHandler<T>({
     mainDivRef: ref,
     tokens,
@@ -863,10 +893,10 @@ const _Inlay = <T,>(
     addNewTokenOnCommit,
     insertSpacerOnCommit,
     displayCommitCharSpacer: memoizedDisplayCommitCharSpacer,
-    forceImmediateRestoreRef
+    forceImmediateRestoreRef,
+    lastOperationTypeRef
   })
 
-  // Sync external caret prop changes into internal refs
   React.useEffect(() => {
     if (!isSameCaret(caretState, savedCursorRef.current)) {
       savedCursorRef.current = caretState
@@ -882,50 +912,27 @@ const _Inlay = <T,>(
   const rootClassName = `inlay-root-${uniqueId.replace(/:/g, '')}`
   const combinedClassName = [className, rootClassName].filter(Boolean).join(' ')
 
-  // Handle focus on the root element when there are no tokens
   const onRootFocus = React.useCallback(() => {
-    // Only create a new token if there are no tokens and focus is on the root
     if (tokens.length === 0 && document.activeElement === ref.current) {
-      console.log('[onRootFocus] Empty inlay focused, creating new token')
-
-      // Create a new empty token using the parseToken function
       const emptyToken = memoizedParseToken('')
 
       if (emptyToken !== null) {
-        // First, remove focus from the root to avoid visual issues with the caret
         if (document.activeElement === ref.current) {
-          // Temporarily blur the root element
           ;(document.activeElement as HTMLElement).blur()
         }
-
-        // Update tokens state with the new empty token
         setTokens([emptyToken])
-
-        // Wait for two animation frames - one for React to render, one for the browser to paint
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            // Find the newly created token element
             const newTokenEl = ref.current?.querySelector('[data-token-id="0"]')
-
             if (newTokenEl) {
-              // Find the editable region within the token
               const editableRegion = newTokenEl.querySelector(
                 '[data-inlay-editable-region="true"]'
               ) as HTMLElement | null
-
-              // Set activeTokenRef directly to help with focus visualization
               activeTokenRef.current = newTokenEl as HTMLElement
-
-              // Create and set a selection range to ensure proper caret visualization
               const range = document.createRange()
               const sel = window.getSelection()
-
-              // Focus the editable region if it exists, otherwise the token itself
               if (editableRegion && editableRegion.firstChild) {
-                // Focus the editable region
                 editableRegion.focus()
-
-                // Set cursor at beginning of content
                 if (sel) {
                   if (editableRegion.firstChild.nodeType === Node.TEXT_NODE) {
                     range.setStart(editableRegion.firstChild, 0)
@@ -935,9 +942,7 @@ const _Inlay = <T,>(
                   }
                 }
               } else if (editableRegion) {
-                // Empty editable region with no text node
                 editableRegion.focus()
-
                 if (sel) {
                   range.selectNodeContents(editableRegion)
                   range.collapse(true)
@@ -945,9 +950,7 @@ const _Inlay = <T,>(
                   sel.addRange(range)
                 }
               } else {
-                // Fallback to focusing the token element itself
                 ;(newTokenEl as HTMLElement).focus()
-
                 if (sel && newTokenEl.firstChild) {
                   range.selectNodeContents(newTokenEl)
                   range.collapse(true)
@@ -955,14 +958,10 @@ const _Inlay = <T,>(
                   sel.addRange(range)
                 }
               }
-
-              // Update cursor state after focus and selection changes
               savedCursorRef.current = { index: 0, offset: 0 }
               if (!isSameCaret({ index: 0, offset: 0 }, caretState)) {
                 setCaretState({ index: 0, offset: 0 })
               }
-
-              // Force a layout calculation to ensure proper rendering
               newTokenEl.getBoundingClientRect()
             }
           })
@@ -1051,19 +1050,12 @@ const InlayToken = React.forwardRef<
   ScopedProps<InlayTokenProps>
 >(({ index, children, asChild, __scope, editable = false }, forwardedRef) => {
   const ref = React.useRef<HTMLDivElement>(null)
-  console.log(
-    '[InlayToken] Rendering token at index:',
-    index,
-    'With children:',
-    children
-  )
-  const { activeTokenRef } = useInlayContext(COMPONENT_NAME, __scope)
-  // Removed displayCommitCharSpacer from destructuring as it's not directly used here for the condition
-  const { spacerChars, renderSpacer, tokens } = useInlayContext(
-    // Added tokens
-    COMPONENT_NAME,
-    __scope
-  )
+  const {
+    activeTokenRef,
+    renderSpacer: contextRenderSpacer,
+    tokens,
+    spacerChars: contextSpacerChars
+  } = useInlayContext(COMPONENT_NAME, __scope)
 
   let displayContent: React.ReactNode = children
   const isEffectivelyEditable =
@@ -1087,29 +1079,17 @@ const InlayToken = React.forwardRef<
         data-token-editable={editable}
         contentEditable={isEffectivelyEditable}
         suppressContentEditableWarning
-        onBeforeInput={(e) => {
-          const event = e.nativeEvent as InputEvent
-          console.log(
-            '[InlayToken onBeforeInput] SPAN Index:',
-            index,
-            'inputType:',
-            event.inputType,
-            'data:',
-            event.data,
-            'target:',
-            e.target,
-            'currentTarget:',
-            e.currentTarget
-          )
+        onBeforeInput={() => {
+          // const event = e.nativeEvent as InputEvent
+          // console.log(...)
         }}
       >
         {displayContent}
       </Comp>
-      {/* If a spacer char is set for this token's index in state, call renderSpacer */}
-      {index < tokens.length - 1 && // Only render if not the last token
-        spacerChars &&
-        spacerChars[index] &&
-        renderSpacer(spacerChars[index]!, index)}
+      {index < tokens.length - 1 &&
+        contextSpacerChars &&
+        contextSpacerChars[index] &&
+        contextRenderSpacer(contextSpacerChars[index]!, index)}
     </>
   )
 })
@@ -1131,14 +1111,13 @@ const InlayTokenEditableText = React.forwardRef<
   )
 
   React.useEffect(() => {
-    const actualValue = value === undefined || value === '' ? '' : value // Store empty string, not ZWS
+    const actualValue = value === undefined || value === '' ? '' : value
     _registerEditableTextValue(index, actualValue)
     return () => {
-      _registerEditableTextValue(index, null) // Unregister on unmount
+      _registerEditableTextValue(index, null)
     }
   }, [value, index, _registerEditableTextValue])
 
-  // Render ZWS if value is empty or undefined to ensure the span is focusable and has height
   const displayValue = value === undefined || value === '' ? ZWS : value
   return (
     <span

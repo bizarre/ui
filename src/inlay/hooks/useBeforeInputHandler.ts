@@ -1,24 +1,23 @@
 import * as React from 'react'
 import { ZWS } from '../inlay.constants'
 import { calculateOffsetInTextProvider } from '../utils/domNavigationUtils'
+import type { CaretPosition, InlayOperationType } from '../inlay.types'
 // We might need ScopedProps or other common types if we were to use context, but for now, direct props.
+
+// Add DEBUG_HISTORY const if not already present or imported
+const DEBUG_HISTORY = true
 
 type UseBeforeInputHandlerProps<T> = {
   tokens: Readonly<T[]>
   activeTokenRef: React.RefObject<HTMLElement | null>
   parseToken: (value: string) => T | null
   setTokens: React.Dispatch<React.SetStateAction<T[]>>
-  savedCursorRef: React.MutableRefObject<{
-    index: number
-    offset: number
-  } | null>
+  savedCursorRef: React.MutableRefObject<CaretPosition | null>
   mainDivRef: React.RefObject<HTMLDivElement | null>
   spacerChars: (string | null)[]
   setSpacerChars: React.Dispatch<React.SetStateAction<(string | null)[]>>
-  programmaticCursorExpectationRef: React.MutableRefObject<{
-    index: number
-    offset: number
-  } | null>
+  programmaticCursorExpectationRef: React.MutableRefObject<CaretPosition | null>
+  lastOperationTypeRef: React.MutableRefObject<InlayOperationType>
 }
 
 export function useBeforeInputHandler<T>({
@@ -30,17 +29,19 @@ export function useBeforeInputHandler<T>({
   mainDivRef, // Was ref
   spacerChars,
   setSpacerChars,
-  programmaticCursorExpectationRef
+  programmaticCursorExpectationRef,
+  lastOperationTypeRef
 }: UseBeforeInputHandlerProps<T>) {
   const onBeforeInputHandler = React.useCallback(
     (e: React.FormEvent<HTMLDivElement>) => {
       const event = e.nativeEvent as InputEvent
-      console.log(
-        '[_onBeforeInputHandler RAW EVENT] inputType:',
-        event.inputType,
-        'data:',
-        event.data
-      )
+      if (DEBUG_HISTORY)
+        console.log(
+          '[_onBeforeInputHandler RAW EVENT] inputType:',
+          event.inputType,
+          'data:',
+          event.data
+        )
 
       if (event.inputType === 'insertParagraph') {
         // Potentially allow Enter key to be handled by onKeyDown for commitOnChars, etc.
@@ -60,28 +61,29 @@ export function useBeforeInputHandler<T>({
         return
       }
 
-      console.log(
-        '[_onBeforeInputHandler START] inputType:',
-        event.inputType,
-        'data:',
-        event.data,
-        'document.activeElement:',
-        document.activeElement === mainDivRef.current
-          ? 'main_div'
-          : (document.activeElement as HTMLElement)?.getAttribute(
-              'data-token-id'
-            ) || document.activeElement,
-        'localActiveTokenRef.current:', // This was the original name in the log
-        activeTokenRef.current?.dataset.tokenId,
-        'Target element of event:',
-        (event.target as HTMLElement)?.dataset?.tokenId ||
-          (
-            (event.target as Node)?.parentElement?.closest?.(
-              '[data-token-id]'
-            ) as HTMLElement
-          )?.dataset?.tokenId ||
-          (event.target === mainDivRef.current ? 'main_div' : event.target)
-      )
+      if (DEBUG_HISTORY)
+        console.log(
+          '[_onBeforeInputHandler START] inputType:',
+          event.inputType,
+          'data:',
+          event.data,
+          'document.activeElement:',
+          document.activeElement === mainDivRef.current
+            ? 'main_div'
+            : (document.activeElement as HTMLElement)?.getAttribute(
+                'data-token-id'
+              ) || document.activeElement,
+          'localActiveTokenRef.current:', // This was the original name in the log
+          activeTokenRef.current?.dataset.tokenId,
+          'Target element of event:',
+          (event.target as HTMLElement)?.dataset?.tokenId ||
+            (
+              (event.target as Node)?.parentElement?.closest?.(
+                '[data-token-id]'
+              ) as HTMLElement
+            )?.dataset?.tokenId ||
+            (event.target === mainDivRef.current ? 'main_div' : event.target)
+        )
 
       const targetIsWithinActiveToken =
         activeTokenRef.current &&
@@ -434,7 +436,7 @@ export function useBeforeInputHandler<T>({
             const newTokensResult = [...tokens] // currentTokens is from props
             if (activeIndex >= 0 && activeIndex < newTokensResult.length) {
               newTokensResult[activeIndex] = newValueForToken
-              setTokens(newTokensResult) // setTokensFn is from props
+              setTokens(newTokensResult)
               savedCursorRef.current = {
                 // savedCursorRefObj is from props
                 index: activeIndex,
@@ -454,6 +456,15 @@ export function useBeforeInputHandler<T>({
           }
           return // Character insertion handled
         }
+
+        // Make sure to set lastOperationTypeRef at the end of this main conditional block
+        // if an action was taken (insertion or deletion within the token)
+        lastOperationTypeRef.current = 'typing'
+        if (DEBUG_HISTORY)
+          console.log(
+            '[_onBeforeInputHandler] lastOperationTypeRef SET TO TYPING (in editable token)'
+          )
+        return // Return if handled within editable token
       } else if (
         event.data &&
         !activeTokenRef.current &&
@@ -491,10 +502,32 @@ export function useBeforeInputHandler<T>({
             textForNewToken
           )
         }
+        lastOperationTypeRef.current = 'typing' // Typing in root
+        if (DEBUG_HISTORY)
+          console.log(
+            '[_onBeforeInputHandler] lastOperationTypeRef SET TO TYPING (in root)'
+          )
         return // Root input handled
       }
+
+      // Fallback if not specifically handled above, but was a data input or deletion event
+      // This ensures lastOperationTypeRef is set if the event was relevant but didn't fit specific handlers.
+      if (event.data && !isDeletion) {
+        lastOperationTypeRef.current = 'typing'
+        if (DEBUG_HISTORY)
+          console.log(
+            '[_onBeforeInputHandler] lastOperationTypeRef SET TO TYPING (fallback)'
+          )
+      } else if (isDeletion) {
+        lastOperationTypeRef.current = 'delete'
+        if (DEBUG_HISTORY)
+          console.log(
+            '[_onBeforeInputHandler] lastOperationTypeRef SET TO DELETE (fallback)'
+          )
+      }
+
       console.log(
-        '[_onBeforeInputHandler] Event not explicitly handled, allowing default or other handlers. Type:',
+        '[_onBeforeInputHandler] Event not explicitly handled by specific token/root logic, lastOpType set by fallback. Type:',
         event.inputType,
         'Data:',
         event.data
@@ -509,8 +542,8 @@ export function useBeforeInputHandler<T>({
       mainDivRef,
       spacerChars,
       setSpacerChars,
-      programmaticCursorExpectationRef
-      // ZWS is a constant, not needed in dep array
+      programmaticCursorExpectationRef,
+      lastOperationTypeRef
     ]
   )
 
