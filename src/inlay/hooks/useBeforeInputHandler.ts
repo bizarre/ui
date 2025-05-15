@@ -268,9 +268,23 @@ export function useBeforeInputHandler<T>({
             // Moved common logic for applying token update/removal here
             const newValueForToken = parseToken(newTextForToken)
 
-            if (newValueForToken === null) {
+            // Check if we are dealing with a potentially empty token
+            const isEmpty = newTextForToken === ''
+            const hasNonNullSpacer =
+              activeIndex < spacerChars.length &&
+              (spacerChars[activeIndex] !== null ||
+                (activeIndex > 0 && spacerChars[activeIndex - 1] !== null))
+            const isOnlyToken = tokens.length === 1 && activeIndex === 0
+
+            // Remove token if:
+            // 1. newValueForToken is null, OR
+            // 2. token is empty AND has a null spacer AND is not the only token
+            if (
+              newValueForToken === null ||
+              (isEmpty && !hasNonNullSpacer && !isOnlyToken)
+            ) {
               console.log(
-                '[_onBeforeInputHandler] Token became null after deletion, removing token:',
+                '[_onBeforeInputHandler] Token became null or is empty with null spacer after deletion, removing token:',
                 activeIndex
               )
               const newTokensResult = tokens.filter((_, i) => i !== activeIndex)
