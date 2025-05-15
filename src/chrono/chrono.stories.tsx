@@ -4,12 +4,64 @@ import { Chrono } from '..'
 import type { ChronoProps } from '.'
 import * as React from 'react'
 
+/**
+ * Chrono is a flexible time range picker with built-in intelligence.
+ * It supports natural language input, relative time handling, and keyboard navigation
+ * to provide an intuitive date selection experience.
+ *
+ * ## Features
+ *
+ * - 🌐 **Natural language support** - Parse expressions like "last 2 weeks" using chrono-node
+ * - ⌨️ **Keyboard navigation** - Edit day, month, year segments with intuitive keyboard shortcuts
+ * - 🌍 **Timezone-aware** - Handle time zones properly in your date picker
+ * - ♿ **Accessible** - Built with accessibility in mind
+ *
+ * ## Parameters
+ *
+ * | Name | Type | Description |
+ * |------|------|-------------|
+ * | `onDateRangeChange` | `(range: { startDate?: Date, endDate?: Date }) => void` | Callback when date range changes |
+ * | `dateRange` | `{ startDate?: Date, endDate?: Date }` | Controlled date range value |
+ * | `defaultDateRange` | `{ startDate?: Date, endDate?: Date }` | Initial date range for uncontrolled component |
+ * | `formatInput` | `string \| null` | Format for input display (null for absolute dates) |
+ *
+ * ## Usage
+ *
+ * ```tsx
+ * <Chrono.Root onDateRangeChange={handleChange}>
+ *   <Chrono.Input />
+ *   <Chrono.Portal>
+ *     <Chrono.Shortcut duration={{ hours: 1 }}>1 hour</Chrono.Shortcut>
+ *     <Chrono.Shortcut duration={{ days: 1 }}>1 day</Chrono.Shortcut>
+ *   </Chrono.Portal>
+ * </Chrono.Root>
+ * ```
+ *
+ * ## Use Cases
+ *
+ * - Analytics dashboards
+ * - Log explorers
+ * - Data visualization
+ * - Monitoring tools
+ */
 const meta: Meta<typeof Chrono> = {
-  component: Chrono.Root
+  component: Chrono.Root,
+  title: 'Components/Chrono',
+  tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: 'A time range picker with built-in intelligence'
+      }
+    }
+  }
 }
 
 export default meta
 
+/**
+ * Basic example of the Chrono component showing date range selection with shortcuts.
+ */
 export const Basic = () => {
   const [dateRange, setDateRange] = React.useState<ChronoProps['dateRange']>({
     startDate: undefined,
@@ -53,6 +105,10 @@ export const Basic = () => {
   )
 }
 
+/**
+ * Example showing absolute date format instead of relative.
+ * Set `formatInput={null}` to use absolute date format.
+ */
 export const Absolute = () => {
   const [dateRange, setDateRange] = React.useState<ChronoProps['dateRange']>({
     startDate: undefined,
@@ -96,6 +152,10 @@ export const Absolute = () => {
   )
 }
 
+/**
+ * Example demonstrating future date shortcuts with negative durations.
+ * Useful for scheduling and forward-looking date selection.
+ */
 export const WithFutureShortcuts = () => {
   const [dateRange, setDateRange] = React.useState<ChronoProps['dateRange']>({
     startDate: undefined,
@@ -126,6 +186,10 @@ export const WithFutureShortcuts = () => {
   )
 }
 
+/**
+ * Example demonstrating controlled state to prevent future dates.
+ * This pattern is useful for validation and restricting date selections.
+ */
 export const Controlled = () => {
   const [dateRange, setDateRange] = React.useState<ChronoProps['dateRange']>({
     startDate: undefined,
@@ -176,6 +240,10 @@ export const Controlled = () => {
   )
 }
 
+/**
+ * Datadog-inspired design with custom styling and duration badge.
+ * Shows how to create an analytics-style time picker with relative time display.
+ */
 export const DataDog = () => {
   const [dateRange, setDateRange] = React.useState<ChronoProps['dateRange']>({
     startDate: new Date(Date.now() - 1000 * 60 * 5),

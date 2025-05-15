@@ -18,19 +18,21 @@ type UseBeforeInputHandlerProps<T> = {
   setSpacerChars: React.Dispatch<React.SetStateAction<(string | null)[]>>
   programmaticCursorExpectationRef: React.MutableRefObject<CaretPosition | null>
   lastOperationTypeRef: React.MutableRefObject<InlayOperationType>
+  setCaretState: React.Dispatch<React.SetStateAction<CaretPosition | null>>
 }
 
 export function useBeforeInputHandler<T>({
-  tokens, // Renamed from currentTokens for clarity
-  activeTokenRef, // Was localActiveTokenRef
-  parseToken, // Was parseTokenFn
-  setTokens, // Was setTokensFn
-  savedCursorRef, // Was savedCursorRefObj
-  mainDivRef, // Was ref
+  tokens,
+  activeTokenRef,
+  parseToken,
+  setTokens,
+  savedCursorRef,
+  mainDivRef,
   spacerChars,
   setSpacerChars,
   programmaticCursorExpectationRef,
-  lastOperationTypeRef
+  lastOperationTypeRef,
+  setCaretState
 }: UseBeforeInputHandlerProps<T>) {
   const onBeforeInputHandler = React.useCallback(
     (e: React.FormEvent<HTMLDivElement>) => {
@@ -152,6 +154,7 @@ export function useBeforeInputHandler<T>({
                     }
                     programmaticCursorExpectationRef.current =
                       savedCursorRef.current
+                    setCaretState(savedCursorRef.current)
                     return // Spacer deletion handled
                   }
 
@@ -193,6 +196,7 @@ export function useBeforeInputHandler<T>({
                       }
                       programmaticCursorExpectationRef.current =
                         savedCursorRef.current
+                      setCaretState(savedCursorRef.current)
                       return // Merge handled successfully
                     } else {
                       console.warn(
@@ -232,6 +236,7 @@ export function useBeforeInputHandler<T>({
                     }
                     programmaticCursorExpectationRef.current =
                       savedCursorRef.current
+                    setCaretState(savedCursorRef.current)
                     return
                   }
                   return
@@ -278,6 +283,7 @@ export function useBeforeInputHandler<T>({
               if (newTokensResult.length === 0) {
                 savedCursorRef.current = null
                 programmaticCursorExpectationRef.current = null
+                setCaretState(null)
               } else if (activeIndex >= newTokensResult.length) {
                 const lastToken = newTokensResult[newTokensResult.length - 1]
                 savedCursorRef.current = {
@@ -286,10 +292,12 @@ export function useBeforeInputHandler<T>({
                 }
                 programmaticCursorExpectationRef.current =
                   savedCursorRef.current
+                setCaretState(savedCursorRef.current)
               } else {
                 savedCursorRef.current = { index: activeIndex, offset: 0 }
                 programmaticCursorExpectationRef.current =
                   savedCursorRef.current
+                setCaretState(savedCursorRef.current)
               }
             } else {
               // Token updated
@@ -303,6 +311,7 @@ export function useBeforeInputHandler<T>({
                 }
                 programmaticCursorExpectationRef.current =
                   savedCursorRef.current
+                setCaretState(savedCursorRef.current)
               } else {
                 console.error(
                   "[_onBeforeInputHandler] activeIndex out of bounds for deletion. This shouldn't happen."
@@ -443,6 +452,7 @@ export function useBeforeInputHandler<T>({
                 offset: newCursorOffset
               }
               programmaticCursorExpectationRef.current = savedCursorRef.current
+              setCaretState(savedCursorRef.current)
             } else {
               console.error(
                 "[_onBeforeInputHandler] activeIndex out of bounds for insertion. This shouldn't happen."
@@ -490,6 +500,7 @@ export function useBeforeInputHandler<T>({
             offset: textForNewToken.length
           }
           programmaticCursorExpectationRef.current = savedCursorRef.current
+          setCaretState(savedCursorRef.current)
           console.log(
             '[_onBeforeInputHandler] Handled root input. New token created:',
             JSON.stringify(newParsedToken),
@@ -543,7 +554,8 @@ export function useBeforeInputHandler<T>({
       spacerChars,
       setSpacerChars,
       programmaticCursorExpectationRef,
-      lastOperationTypeRef
+      lastOperationTypeRef,
+      setCaretState
     ]
   )
 

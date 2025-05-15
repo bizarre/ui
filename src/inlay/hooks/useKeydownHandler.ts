@@ -319,6 +319,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
         // Final check for cursor if newTokens is empty
         if (newTokens.length === 0) {
           savedCursorRef.current = null
+          setCaretState(null)
           console.log(
             '[KeydownHandler] Final newTokens is empty. savedCursorRef.current = null'
           )
@@ -332,6 +333,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
             index: cursorIndexAfterDelete,
             offset: cursorOffsetAfterDelete
           }
+          setCaretState(savedCursorRef.current)
           console.log(
             '[KeydownHandler] Final newTokens NOT empty. savedCursorRef.current:',
             savedCursorRef.current
@@ -371,6 +373,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
         if (deletionHappened) {
           lastOperationTypeRef.current = 'delete'
         }
+        setCaretState(savedCursorRef.current)
         return
       }
       console.log(
@@ -432,6 +435,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
               return updatedTokens
             })
             savedCursorRef.current = { index: activeIndex, offset: 0 }
+            setCaretState(savedCursorRef.current)
           } else {
             removeToken(activeIndex)
           }
@@ -448,6 +452,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
           onTokenFocus?.(null)
         }
         savedCursorRef.current = null
+        setCaretState(null)
         return
       }
 
@@ -607,6 +612,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                     }
                     programmaticCursorExpectationRef.current =
                       savedCursorRef.current
+                    setCaretState(savedCursorRef.current)
 
                     // If the merged token was the active one, clear active state
                     if (
@@ -671,6 +677,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                     }
                     programmaticCursorExpectationRef.current =
                       savedCursorRef.current
+                    setCaretState(savedCursorRef.current)
 
                     // If the token that was merged into (and thus effectively the one where deletion occurred at its end)
                     // is the active one, and the NEXT one was removed. The active token remains, but its content changed.
@@ -738,6 +745,7 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                 offset: newCursorOffset
               }
               programmaticCursorExpectationRef.current = savedCursorRef.current
+              setCaretState(savedCursorRef.current)
             } else {
               removeToken(activeIndex)
             }
@@ -857,7 +865,8 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       saveCursor,
       restoreCursor,
       forceImmediateRestoreRef,
-      lastOperationTypeRef
+      lastOperationTypeRef,
+      setCaretState
     ]
   )
 
@@ -866,6 +875,42 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       let preventDefaultCalledByOnCharInput = false
       const setPreventDefaultFlag = () => {
         preventDefaultCalledByOnCharInput = true
+      }
+
+      // Arrow key handling to update caret position
+      if (
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+        activeTokenRef.current
+      ) {
+        const activeTokenId =
+          activeTokenRef.current.getAttribute('data-token-id')
+        if (activeTokenId) {
+          const activeIndex = parseInt(activeTokenId)
+          const selection = window.getSelection()
+
+          if (selection && selection.rangeCount > 0) {
+            // Just let the default behavior happen, but capture the new position on next tick
+            setTimeout(() => {
+              const newSelection = window.getSelection()
+              if (newSelection && newSelection.rangeCount > 0) {
+                const newRange = newSelection.getRangeAt(0)
+                const newOffset = newRange.startOffset
+
+                // Only update if we're still in the same token
+                if (
+                  activeTokenRef.current?.getAttribute('data-token-id') ===
+                  activeTokenId
+                ) {
+                  savedCursorRef.current = {
+                    index: activeIndex,
+                    offset: newOffset
+                  }
+                  setCaretState(savedCursorRef.current)
+                }
+              }
+            }, 0)
+          }
+        }
       }
 
       // --- UNDO/REDO LOGIC --- START ---
@@ -973,7 +1018,13 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       }
       // --- UNDO/REDO LOGIC --- END ---
 
-      if (onCharInput && (e.key.length === 1 || e.key === 'Enter')) {
+      if (
+        onCharInput &&
+        (e.key.length === 1 ||
+          e.key === 'Enter' ||
+          e.key === 'Backspace' ||
+          e.key === 'Delete')
+      ) {
         let tokenHandleForContext: TokenHandle<T> | null = null
         const currentActiveTokenElement = activeTokenRef.current
 
@@ -1130,15 +1181,40 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                     ? e.key
                     : null
               newSpacerCharsList.splice(activeIndex + 1, 0, null)
-              while (newSpacerCharsList.length < newTokens.length)
-                newSpacerCharsList.push(null)
-              if (newSpacerCharsList.length > newTokens.length)
-                newSpacerCharsList.length = newTokens.length
               setTokens(newTokens)
               setSpacerChars(newSpacerCharsList)
-              savedCursorRef.current = { index: activeIndex + 1, offset: 0 }
+
+              // Determine the offset for the new token
+              let newCursorOffset = 0
+              const newActualTokenValue = options.valueForNewToken
+
+              // If options.valueForNewToken is a string (e.g. "!" from the story)
+              // its length is the offset.
+              if (typeof newActualTokenValue === 'string') {
+                newCursorOffset = newActualTokenValue.length
+              } else if (
+                newActualTokenValue &&
+                typeof newActualTokenValue === 'object'
+              ) {
+                // If options.valueForNewToken is an object (the actual token type T)
+                // then get its text representation's length for the offset.
+                // Note: getActualTextForToken is used here. If the token is brand new and not yet in DOM
+                // for _getEditableTextValue to pick up, this might default to its basic string form or empty.
+                // For the story's case: `token.commit({ valueForNewToken: key, ... })` where key is '!',
+                // options.valueForNewToken will be '!', so the string path is taken.
+                const textOfNewToken = getActualTextForToken(
+                  newActualTokenValue,
+                  activeIndex + 1
+                )
+                newCursorOffset = textOfNewToken.length
+              }
+
+              savedCursorRef.current = {
+                index: activeIndex + 1,
+                offset: newCursorOffset
+              }
               programmaticCursorExpectationRef.current = savedCursorRef.current
-              setPreventDefaultFlag()
+              setPreventDefaultFlag() // Prevent default because onCharInput handled it
             },
             remove: () => {
               if (!isEditable && tokens.length === 1 && activeIndex === 0) {
@@ -1370,7 +1446,36 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
                 newSpacerCharsList.splice(activeIndex + 1, 0, null)
                 if (newSpacerCharsList.length > newTokens.length)
                   newSpacerCharsList.length = newTokens.length
-                savedCursorRef.current = { index: activeIndex + 1, offset: 0 }
+
+                // Determine the offset for the new token
+                let newCursorOffset = 0
+                const newActualTokenValue = valueForNewSlot
+
+                // If options.valueForNewToken is a string (e.g. "!" from the story)
+                // its length is the offset.
+                if (typeof newActualTokenValue === 'string') {
+                  newCursorOffset = newActualTokenValue.length
+                } else if (
+                  newActualTokenValue &&
+                  typeof newActualTokenValue === 'object'
+                ) {
+                  // If options.valueForNewToken is an object (the actual token type T)
+                  // then get its text representation's length for the offset.
+                  // Note: getActualTextForToken is used here. If the token is brand new and not yet in DOM
+                  // for _getEditableTextValue to pick up, this might default to its basic string form or empty.
+                  // For the story's case: `token.commit({ valueForNewToken: key, ... })` where key is '!',
+                  // options.valueForNewToken will be '!', so the string path is taken.
+                  const textOfNewToken = getActualTextForToken(
+                    newActualTokenValue,
+                    activeIndex + 1
+                  )
+                  newCursorOffset = textOfNewToken.length
+                }
+
+                savedCursorRef.current = {
+                  index: activeIndex + 1,
+                  offset: newCursorOffset
+                }
                 programmaticCursorExpectationRef.current =
                   savedCursorRef.current
                 focusMovedToNewToken = true

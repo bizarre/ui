@@ -52,7 +52,7 @@ const _Inlay = <T,>(
     defaultNewTokenValue,
     addNewTokenOnCommit = true,
     insertSpacerOnCommit = true,
-    displayCommitCharSpacer = false,
+    displayCommitCharSpacer = true,
     onInput: onCharInput,
     style,
     enableCustomSelectionDrawing = true,
@@ -378,7 +378,8 @@ const _Inlay = <T,>(
     onTokenFocus: memoizedOnTokenFocus,
     savedCursorRef,
     programmaticCursorExpectationRef,
-    selectAllStateRef
+    selectAllStateRef,
+    setCaretState
   })
 
   const saveCursor = React.useCallback(() => {
@@ -782,9 +783,11 @@ const _Inlay = <T,>(
             ).length
           }
           programmaticCursorExpectationRef.current = savedCursorRef.current
+          setCaretState(savedCursorRef.current)
         } else if (newTokens.length === 0) {
           savedCursorRef.current = null
           programmaticCursorExpectationRef.current = null
+          setCaretState(null)
         } else if (
           newTokens.length > 0 &&
           (nextCursorIndex === null || nextCursorIndex >= newTokens.length)
@@ -795,6 +798,7 @@ const _Inlay = <T,>(
             offset: getTokenStringForOffset(newTokens[lastIdx], lastIdx).length
           }
           programmaticCursorExpectationRef.current = savedCursorRef.current
+          setCaretState(savedCursorRef.current)
         }
         return newTokens
       })
@@ -807,7 +811,8 @@ const _Inlay = <T,>(
       setSpacerChars,
       _getEditableTextValue,
       activeTokenRef,
-      programmaticCursorExpectationRef
+      programmaticCursorExpectationRef,
+      setCaretState
     ]
   )
 
@@ -834,7 +839,8 @@ const _Inlay = <T,>(
     spacerChars,
     setSpacerChars,
     programmaticCursorExpectationRef,
-    lastOperationTypeRef
+    lastOperationTypeRef,
+    setCaretState
   })
 
   const onKeyDownEventHandler = useKeydownHandler<T>({
@@ -929,6 +935,7 @@ const _Inlay = <T,>(
                 '[data-inlay-editable-region="true"]'
               ) as HTMLElement | null
               activeTokenRef.current = newTokenEl as HTMLElement
+              onTokenFocus?.(0)
               const range = document.createRange()
               const sel = window.getSelection()
               if (editableRegion && editableRegion.firstChild) {
@@ -977,7 +984,8 @@ const _Inlay = <T,>(
     savedCursorRef,
     isSameCaret,
     caretState,
-    setCaretState
+    setCaretState,
+    onTokenFocus
   ])
 
   return (

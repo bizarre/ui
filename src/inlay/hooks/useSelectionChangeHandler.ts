@@ -14,6 +14,12 @@ export interface UseSelectionChangeHandlerProps {
     offset: number
   } | null>
   selectAllStateRef: React.MutableRefObject<SelectAllState>
+  setCaretState?: React.Dispatch<
+    React.SetStateAction<{
+      index: number
+      offset: number
+    } | null>
+  >
 }
 
 export type CrossTokenSelectionDetails = {
@@ -39,7 +45,8 @@ export function useSelectionChangeHandler(
     onTokenFocus,
     savedCursorRef,
     programmaticCursorExpectationRef,
-    selectAllStateRef
+    selectAllStateRef,
+    setCaretState
   } = props
 
   React.useEffect(() => {
@@ -170,6 +177,7 @@ export function useSelectionChangeHandler(
         }
         if (savedCursorRef.current) {
           savedCursorRef.current = null
+          setCaretState?.(null)
         }
         if (programmaticCursorExpectationRef.current) {
           programmaticCursorExpectationRef.current = null
@@ -323,6 +331,7 @@ export function useSelectionChangeHandler(
               onTokenFocus?.(null)
             }
 
+            // Token updated
             if (
               !programmaticCursorExpectationRef.current &&
               savedCursorRef.current
@@ -331,6 +340,7 @@ export function useSelectionChangeHandler(
                 '[selectionchange] Cross-token detected, NO expectation, clearing savedCursor.'
               )
               savedCursorRef.current = null
+              setCaretState?.(null) // Update caretState as well
             } else if (programmaticCursorExpectationRef.current) {
               console.log(
                 '[selectionchange] Cross-token detected, but expectation exists. NOT clearing savedCursor.'
@@ -404,7 +414,11 @@ export function useSelectionChangeHandler(
             onTokenFocus?.(null)
           }
           if (savedCursorRef.current) {
+            console.log(
+              '[selectionchange] Selection in root. Clearing savedCursor.'
+            )
             savedCursorRef.current = null
+            setCaretState?.(null)
           }
           if (programmaticCursorExpectationRef.current) {
             programmaticCursorExpectationRef.current = null
@@ -473,6 +487,11 @@ export function useSelectionChangeHandler(
                   index: newActiveIndex,
                   offset: finalOffset
                 }
+                // Update caretState when cursor position changes within a token
+                setCaretState?.({
+                  index: newActiveIndex,
+                  offset: finalOffset
+                })
               }
               programmaticCursorExpectationRef.current = null
             } else {
@@ -516,6 +535,11 @@ export function useSelectionChangeHandler(
                 index: newActiveIndex,
                 offset: finalOffset
               }
+              // Update caretState when cursor position changes within a token
+              setCaretState?.({
+                index: newActiveIndex,
+                offset: finalOffset
+              })
             } else {
               console.log(
                 '[selectionchange] No/Diff Expectation: Selection on same token index',
@@ -526,6 +550,20 @@ export function useSelectionChangeHandler(
                 finalOffset,
                 '. NOT updating savedCursor.offset.'
               )
+              // Add this check - if the offset changed within the same token
+              if (currentSaved.offset !== finalOffset) {
+                console.log(
+                  '[selectionchange] Offset changed within same token. Updating savedCursor.'
+                )
+                savedCursorRef.current = {
+                  index: newActiveIndex,
+                  offset: finalOffset
+                }
+                setCaretState?.({
+                  index: newActiveIndex,
+                  offset: finalOffset
+                })
+              }
               if (
                 savedCursorRef.current === null &&
                 typeof newActiveIndex === 'number'
@@ -537,6 +575,11 @@ export function useSelectionChangeHandler(
                   index: newActiveIndex,
                   offset: finalOffset
                 }
+                // Update caretState when cursor position changes within a token
+                setCaretState?.({
+                  index: newActiveIndex,
+                  offset: finalOffset
+                })
               }
             }
           }
@@ -589,6 +632,7 @@ export function useSelectionChangeHandler(
                 '[selectionchange] Selection in root. Clearing savedCursor.'
               )
               savedCursorRef.current = null
+              setCaretState?.(null)
             }
           }
         }
@@ -605,6 +649,7 @@ export function useSelectionChangeHandler(
     activeTokenRef,
     savedCursorRef,
     programmaticCursorExpectationRef,
-    selectAllStateRef
+    selectAllStateRef,
+    setCaretState
   ]) // Added other refs to dependency array
 }
