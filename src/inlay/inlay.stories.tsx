@@ -404,7 +404,7 @@ export const TwitterMentions = () => {
                 onInput={handleInput}
                 value={tokens}
                 commitOnChars={[' ']} // We handle commits manually for mentions
-                className="w-full outline-none"
+                className="w-full outline-none overflow"
                 caret={caret}
                 onCaretChange={setCaret}
                 multiline

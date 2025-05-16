@@ -969,6 +969,8 @@ const _Inlay = <T,>(
           ...style,
           position: 'relative',
           caretColor: 'transparent',
+          // todo: implement js-powered word-break to better mimic native behavior
+          wordBreak: 'break-word',
           ...(multiline && { whiteSpace: 'pre-wrap' })
         }}
         className={combinedClassName}
