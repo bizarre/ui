@@ -24,7 +24,6 @@ import {
 import { useMemoizedCallback } from './hooks/useMemoizedCallback'
 import { useCopyHandler } from './hooks/useCopyHandler'
 import { usePasteHandler } from './hooks/usePasteHandler'
-import { useCustomSelectionDrawing } from './hooks/useCustomSelectionDrawing'
 import { useInlayHistory } from './hooks/useInlayHistory'
 
 const DEBUG_HISTORY = true
@@ -55,15 +54,12 @@ const _Inlay = <T,>(
     displayCommitCharSpacer = true,
     onInput: onCharInput,
     style,
-    enableCustomSelectionDrawing = true,
     className,
     multiline = false,
     ...props
   }: ScopedProps<
     InlayProps<T> & {
-      enableCustomSelectionDrawing?: boolean
       className?: string
-      multiline?: boolean
     }
   >,
   forwardedRef: React.Ref<HTMLElement>
@@ -155,7 +151,7 @@ const _Inlay = <T,>(
           <span
             contentEditable="false"
             suppressContentEditableWarning
-            style={{ whiteSpace: 'pre' }}
+            style={{ whiteSpace: 'pre', display: 'inline' }}
             data-spacer-char={spacerChar}
             data-spacer-after-token={afterTokenIndex}
           >
@@ -213,60 +209,7 @@ const _Inlay = <T,>(
   }, [tokens.length, spacerChars, setSpacerChars, isRestoringHistoryRef])
 
   const savedCursorRef = React.useRef<CaretPosition | null>(null)
-
-  const canvasRef = React.useRef<HTMLCanvasElement>(null)
-  const [desiredLineHeight, setDesiredLineHeight] = React.useState(20)
   const uniqueId = React.useId()
-
-  const highlightRects = useCustomSelectionDrawing<T>({
-    mainDivRef: ref,
-    isEnabled: enableCustomSelectionDrawing,
-    tokens: tokens,
-    spacerChars: spacerChars,
-    _getEditableTextValue: _getEditableTextValue
-  })
-
-  React.useLayoutEffect(() => {
-    if (ref.current) {
-      const computedStyle = window.getComputedStyle(ref.current)
-      const lh = parseFloat(computedStyle.lineHeight)
-      if (!isNaN(lh) && lh > 0) {
-        setDesiredLineHeight(lh)
-      } else if (computedStyle.lineHeight === 'normal') {
-        const fontSize = parseFloat(computedStyle.fontSize)
-        if (!isNaN(fontSize)) {
-          const estimatedLh = Math.round(fontSize * 1.2)
-          setDesiredLineHeight(estimatedLh)
-        }
-      }
-    }
-  }, [])
-
-  React.useEffect(() => {
-    const canvas = canvasRef.current
-    const mainDiv = ref.current
-    if (!canvas || !mainDiv) return
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const inlayRect = mainDiv.getBoundingClientRect()
-
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = Math.floor(inlayRect.width * dpr)
-    canvas.height = Math.floor(inlayRect.height * dpr)
-    canvas.style.width = inlayRect.width + 'px'
-    canvas.style.height = inlayRect.height + 'px'
-    ctx.scale(dpr, dpr)
-
-    ctx.clearRect(0, 0, inlayRect.width, inlayRect.height)
-
-    ctx.fillStyle = 'rgba(0, 120, 215, 0.3)'
-
-    highlightRects.forEach((rect) => {
-      ctx.fillRect(rect.x, rect.y, rect.width, desiredLineHeight)
-    })
-  }, [highlightRects, desiredLineHeight, ref, canvasRef])
 
   React.useEffect(() => {
     const initialSpacers = Array(Math.max(0, tokens.length - 1)).fill(null)
@@ -1014,26 +957,6 @@ const _Inlay = <T,>(
       _registerEditableTextValue={_registerEditableTextValue}
       _getEditableTextValue={_getEditableTextValue}
     >
-      {enableCustomSelectionDrawing && (
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `
-            .${rootClassName} ::selection {
-              background-color: transparent !important;
-            }
-            .${rootClassName} ::-moz-selection {
-              background-color: transparent !important;
-            }
-            .${rootClassName} {
-              caret-color: transparent !important;
-            }
-            .${rootClassName} [data-token-id] {
-              caret-color: auto !important;
-            }
-          `
-          }}
-        />
-      )}
       <Comp
         contentEditable
         suppressContentEditableWarning
@@ -1051,20 +974,6 @@ const _Inlay = <T,>(
         className={combinedClassName}
         {...props}
       >
-        <canvas
-          ref={canvasRef}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            pointerEvents: 'none',
-            zIndex: 9999
-          }}
-          contentEditable={false}
-          aria-hidden="true"
-        />
         {children}
       </Comp>
     </InlayProvider>
@@ -1164,9 +1073,10 @@ const InlayTokenEditableText = React.forwardRef<
       ref={forwardedRef}
       {...props}
       style={{
-        display: 'inline-block',
+        display: 'inline',
         minHeight: '1em',
         minWidth: '1px',
+        caretColor: 'auto',
         ...props.style
       }}
     >
