@@ -99,6 +99,7 @@ export function useCustomSelectionDrawing<T>({
 
         if (mainDivRef.current.contains(range.commonAncestorContainer)) {
           const inlayRootRect = mainDivRef.current.getBoundingClientRect()
+          const containerWidth = inlayRootRect.width
           const newRawRects: HighlightRect[] = []
 
           const editableRegionOrToken = (tokenEl: HTMLElement): HTMLElement =>
@@ -390,11 +391,34 @@ export function useCustomSelectionDrawing<T>({
               }
               if (!foundLine) lines.set(rect.y, [rect])
             })
-            for (const lineRects of Array.from(lines.values())) {
+
+            // Get all lines sorted by y position
+            const sortedLines = Array.from(lines.entries()).sort(
+              ([y1], [y2]) => y1 - y2
+            )
+
+            // Process each line
+            for (
+              let lineIndex = 0;
+              lineIndex < sortedLines.length;
+              lineIndex++
+            ) {
+              const [yPos, lineRects] = sortedLines[lineIndex]
               if (lineRects.length === 0) continue
+
+              // Sort rectangles within this line by x position
               lineRects.sort((a: HighlightRect, b: HighlightRect) => a.x - b.x)
+
+              // For multi-line selections, extend intermediate lines to full width
+              const isFirstLine = lineIndex === 0
+              const isLastLine = lineIndex === sortedLines.length - 1
+              const isSingleLineSelection = sortedLines.length === 1
+
               if (lineRects.length > 0) {
+                // Start with the first rect in the line
                 let currentMergedRect = { ...lineRects[0] }
+
+                // Merge adjacent rectangles in this line
                 for (let i = 1; i < lineRects.length; i++) {
                   const nextRect = lineRects[i]
                   const MAX_HORIZONTAL_GAP_TO_MERGE = 15
@@ -410,11 +434,33 @@ export function useCustomSelectionDrawing<T>({
                     )
                     currentMergedRect.width = newEndX - currentMergedRect.x
                   } else {
+                    // Different segment on the same line
+                    // For lines that aren't the first or last, we might want to extend them
+                    // but for now we'll push this merged segment
                     finalMergedRects.push(currentMergedRect)
                     currentMergedRect = { ...nextRect }
                   }
                 }
+
+                // For multi-line selections:
+                // - Extend non-last lines to container width
+                // - Leave last line and single-line selections as natural width
+                if (!isLastLine && !isSingleLineSelection) {
+                  // For intermediate lines in multi-line selection, extend to container width
+                  currentMergedRect.width = containerWidth - currentMergedRect.x
+                }
+                // Otherwise, keep the rect as is (last line or single line selection)
+
                 finalMergedRects.push(currentMergedRect)
+
+                // If this is a middle line (not first, not last), add a rect from x=0 to the first rect
+                if (!isFirstLine && !isLastLine && lineRects[0].x > 0) {
+                  finalMergedRects.push({
+                    x: 0,
+                    y: yPos,
+                    width: lineRects[0].x
+                  })
+                }
               }
             }
           }
@@ -439,9 +485,6 @@ export function useCustomSelectionDrawing<T>({
       document.removeEventListener('selectionchange', handleSelectionChange)
       setHighlightRects([]) // Clear rects on cleanup
     }
-    // }, [isEnabled, mainDivRef]); // Add other dependencies as they are used (tokens, etc.)
-    // For now, mainDivRef.current inside handler might cause issues if it changes, but it's typically stable.
-    // Let's refine dependencies as we build out full logic for tokens/spacers.
   }, [
     isEnabled,
     mainDivRef,

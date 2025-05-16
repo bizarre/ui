@@ -795,13 +795,25 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
           console.log(
             '[handleRemoveTokenOnKeyDown] selectAllState=all: Clearing all tokens'
           )
-          setTokens([])
-          if (activeTokenRef.current !== null) {
-            activeTokenRef.current = null
-            onTokenFocus?.(null)
+
+          // Create an empty token instead of just setting to empty array
+          const emptyToken = parseToken('')
+          if (emptyToken !== null) {
+            setTokens([emptyToken])
+            savedCursorRef.current = { index: 0, offset: 0 }
+            programmaticCursorExpectationRef.current = savedCursorRef.current
+            setCaretState(savedCursorRef.current)
+            forceImmediateRestoreRef.current = true
+          } else {
+            // Fallback to empty array if parseToken doesn't accept empty string
+            setTokens([])
+            if (activeTokenRef.current !== null) {
+              activeTokenRef.current = null
+              onTokenFocus?.(null)
+            }
+            savedCursorRef.current = null
+            setCaretState(null)
           }
-          savedCursorRef.current = null
-          setCaretState(null)
           return
         }
 
