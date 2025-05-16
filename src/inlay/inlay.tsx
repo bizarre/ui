@@ -1024,6 +1024,12 @@ const _Inlay = <T,>(
             .${rootClassName} ::-moz-selection {
               background-color: transparent !important;
             }
+            .${rootClassName} {
+              caret-color: transparent !important;
+            }
+            .${rootClassName} [data-token-id] {
+              caret-color: auto !important;
+            }
           `
           }}
         />
@@ -1039,6 +1045,7 @@ const _Inlay = <T,>(
         style={{
           ...style,
           position: 'relative',
+          caretColor: 'transparent',
           ...(multiline && { whiteSpace: 'pre-wrap' })
         }}
         className={combinedClassName}
@@ -1053,7 +1060,7 @@ const _Inlay = <T,>(
             width: '100%',
             height: '100%',
             pointerEvents: 'none',
-            zIndex: -1
+            zIndex: 9999
           }}
           contentEditable={false}
           aria-hidden="true"
@@ -1067,51 +1074,64 @@ const _Inlay = <T,>(
 const InlayToken = React.forwardRef<
   HTMLDivElement,
   ScopedProps<InlayTokenProps>
->(({ index, children, asChild, __scope, editable = false }, forwardedRef) => {
-  const ref = React.useRef<HTMLDivElement>(null)
-  const {
-    activeTokenRef,
-    renderSpacer: contextRenderSpacer,
-    tokens,
-    spacerChars: contextSpacerChars
-  } = useInlayContext(COMPONENT_NAME, __scope)
+>(
+  (
+    {
+      index,
+      children,
+      asChild,
+      __scope,
+      editable = false,
+      captureSelectAll = false
+    },
+    forwardedRef
+  ) => {
+    const ref = React.useRef<HTMLDivElement>(null)
+    const {
+      activeTokenRef,
+      renderSpacer: contextRenderSpacer,
+      tokens,
+      spacerChars: contextSpacerChars
+    } = useInlayContext(COMPONENT_NAME, __scope)
 
-  let displayContent: React.ReactNode = children
-  const isEffectivelyEditable =
-    editable || activeTokenRef.current === ref.current
+    let displayContent: React.ReactNode = children
+    const isEffectivelyEditable =
+      editable || activeTokenRef.current === ref.current
 
-  if (
-    typeof children === 'string' &&
-    children === '' &&
-    isEffectivelyEditable
-  ) {
-    displayContent = ZWS
+    if (
+      typeof children === 'string' &&
+      children === '' &&
+      isEffectivelyEditable
+    ) {
+      displayContent = ZWS
+    }
+
+    const Comp = asChild ? Slot : 'span'
+
+    return (
+      <>
+        <Comp
+          ref={composeRefs(forwardedRef, ref)}
+          data-token-id={index}
+          data-token-editable={editable}
+          data-capture-select-all={captureSelectAll}
+          contentEditable={isEffectivelyEditable}
+          suppressContentEditableWarning
+          onBeforeInput={() => {
+            // const event = e.nativeEvent as InputEvent
+            // console.log(...)
+          }}
+        >
+          {displayContent}
+        </Comp>
+        {index < tokens.length - 1 &&
+          contextSpacerChars &&
+          contextSpacerChars[index] &&
+          contextRenderSpacer(contextSpacerChars[index]!, index)}
+      </>
+    )
   }
-
-  const Comp = asChild ? Slot : 'span'
-
-  return (
-    <>
-      <Comp
-        ref={composeRefs(forwardedRef, ref)}
-        data-token-id={index}
-        data-token-editable={editable}
-        contentEditable={isEffectivelyEditable}
-        suppressContentEditableWarning
-        onBeforeInput={() => {
-          // const event = e.nativeEvent as InputEvent
-          // console.log(...)
-        }}
-      >
-        {displayContent}
-      </Comp>
-      {index < tokens.length - 1 &&
-        contextSpacerChars &&
-        contextSpacerChars[index] &&
-        contextRenderSpacer(contextSpacerChars[index]!, index)}
-    </>
-  )
-})
+)
 
 InlayToken.displayName = 'InlayToken'
 

@@ -182,6 +182,7 @@ export type InlayTokenProps = {
   children: React.ReactNode
   asChild?: boolean
   editable?: boolean
+  captureSelectAll?: boolean
 }
 
 // Caret (cursor) position type

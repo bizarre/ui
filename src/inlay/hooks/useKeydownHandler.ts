@@ -2159,7 +2159,14 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
           localActiveToken &&
           (!localActiveToken.textContent ||
             localActiveToken.textContent === ZWS)
+
+        // Check if the token should capture Ctrl+A (default is true for backward compatibility)
+        const shouldCaptureSelectAll =
+          localActiveToken &&
+          localActiveToken.getAttribute('data-capture-select-all') !== 'false'
+
         if (
+          shouldCaptureSelectAll &&
           localActiveToken &&
           localActiveToken.getAttribute('data-token-editable') === 'true' &&
           !isActiveTokenEffectivelyBlank &&
