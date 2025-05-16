@@ -57,11 +57,13 @@ const _Inlay = <T,>(
     style,
     enableCustomSelectionDrawing = true,
     className,
+    multiline = false,
     ...props
   }: ScopedProps<
     InlayProps<T> & {
       enableCustomSelectionDrawing?: boolean
       className?: string
+      multiline?: boolean
     }
   >,
   forwardedRef: React.Ref<HTMLElement>
@@ -141,9 +143,18 @@ const _Inlay = <T,>(
   )
 
   const renderSpacer = React.useCallback(
-    (commitChar: string, afterTokenIndex: number): React.ReactNode => {
+    (spacerChar: string, afterTokenIndex: number): React.ReactNode => {
+      if (multiline && spacerChar === '\n') {
+        return (
+          <br
+            data-newline-spacer-after-token={afterTokenIndex}
+            contentEditable={false}
+            suppressContentEditableWarning
+          />
+        )
+      }
       if (typeof memoizedDisplayCommitCharSpacer === 'function') {
-        return memoizedDisplayCommitCharSpacer(commitChar, afterTokenIndex)
+        return memoizedDisplayCommitCharSpacer(spacerChar, afterTokenIndex)
       }
       if (memoizedDisplayCommitCharSpacer === true) {
         return (
@@ -151,15 +162,16 @@ const _Inlay = <T,>(
             contentEditable="false"
             suppressContentEditableWarning
             style={{ whiteSpace: 'pre' }}
+            data-spacer-char={spacerChar}
             data-spacer-after-token={afterTokenIndex}
           >
-            {commitChar}
+            {spacerChar}
           </span>
         )
       }
       return null
     },
-    [memoizedDisplayCommitCharSpacer]
+    [memoizedDisplayCommitCharSpacer, multiline]
   )
 
   React.useEffect(() => {
@@ -869,7 +881,8 @@ const _Inlay = <T,>(
     history: inlayHistory,
     isRestoringHistoryRef,
     setCaretState,
-    lastOperationTypeRef
+    lastOperationTypeRef,
+    multiline
   })
 
   useCopyHandler<T>({

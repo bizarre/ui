@@ -168,6 +168,13 @@ export type InlayProps<T> = {
    * Called whenever the caret position changes as a consequence of user interaction.
    */
   onCaretChange?: (caret: CaretPosition) => void
+
+  /**
+   * Enables multiline input behavior using Shift+Enter to insert line breaks.
+   * Line breaks are represented as special spacers.
+   * Defaults to `false`.
+   */
+  multiline?: boolean
 } & Omit<React.HTMLAttributes<HTMLElement>, 'onChange' | 'onFocus' | 'onInput'>
 
 export type InlayTokenProps = {

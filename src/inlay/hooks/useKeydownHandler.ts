@@ -53,6 +53,7 @@ export type UseKeydownHandlerProps<T> = {
   isRestoringHistoryRef: React.MutableRefObject<boolean>
   setCaretState: React.Dispatch<React.SetStateAction<CaretPosition | null>> // Added setter for caretState
   lastOperationTypeRef: React.MutableRefObject<InlayOperationType>
+  multiline?: boolean // Add multiline prop
 }
 
 export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
@@ -83,7 +84,8 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
     history, // Destructure
     isRestoringHistoryRef, // Destructure
     setCaretState, // Destructure
-    lastOperationTypeRef
+    lastOperationTypeRef,
+    multiline // Destructure multiline
   } = props
 
   // Helper function to get the meaningful string representation of a token
@@ -1383,6 +1385,285 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       }
       // --- UNDO/REDO LOGIC --- END ---
 
+      // --- SHIFT+ENTER FOR MULTILINE --- START ---
+      if (multiline && e.shiftKey && e.key === 'Enter') {
+        e.preventDefault()
+        lastOperationTypeRef.current = 'typing' // Or a new type like 'insertLineBreak'
+
+        const activeTokenElement = activeTokenRef.current
+        if (
+          activeTokenElement &&
+          activeTokenElement.getAttribute('data-token-editable') === 'true'
+        ) {
+          const activeIndex = parseInt(
+            activeTokenElement.getAttribute('data-token-id')!
+          )
+
+          let currentTokenText = ''
+          const editableRegion = activeTokenElement.querySelector(
+            '[data-inlay-editable-region="true"]'
+          )
+          if (editableRegion) {
+            const regionText = editableRegion.textContent || ''
+            currentTokenText = regionText === ZWS ? '' : regionText
+          } else {
+            const tokenText = activeTokenElement.textContent || ''
+            currentTokenText = tokenText === ZWS ? '' : tokenText
+          }
+
+          let cursorOffsetInToken = 0
+          const selection = window.getSelection()
+
+          // Try to get offset from DOM selection first
+          if (
+            selection &&
+            selection.rangeCount > 0 &&
+            activeTokenElement.contains(selection.anchorNode)
+          ) {
+            const range = selection.getRangeAt(0)
+            const editableRegionNode = activeTokenElement.querySelector(
+              '[data-inlay-editable-region="true"]'
+            )
+
+            if (editableRegionNode) {
+              // EditableText case
+              if (editableRegionNode.contains(range.startContainer)) {
+                if (range.startContainer.nodeType === Node.TEXT_NODE) {
+                  // Caret is in a text node within the editable region
+                  // We need to sum up lengths of preceding sibling text nodes within editableRegionNode
+                  let tempOffset = 0
+                  let currentNode = editableRegionNode.firstChild
+                  while (currentNode && currentNode !== range.startContainer) {
+                    if (currentNode.nodeType === Node.TEXT_NODE) {
+                      tempOffset += (currentNode.textContent || '').length
+                    }
+                    // Potential: Handle element nodes within editable region if they can exist and affect offset
+                    currentNode = currentNode.nextSibling
+                  }
+                  if (currentNode === range.startContainer) {
+                    // Found the text node
+                    tempOffset += range.startOffset
+                  } else {
+                    // Fallback if startContainer is not a direct child text node sequence (e.g. nested spans)
+                    // This might happen if a more complex structure is inside editableRegionNode.
+                    // A robust way would be to create a temporary range from start of editableRegionNode to selection start.
+                    // For now, using range.startOffset relative to its container if it's not a simple text sequence.
+                    console.warn(
+                      '[Shift+Enter] Complex node structure in editable region, offset might be approximate.'
+                    )
+                    tempOffset = range.startOffset
+                  }
+                  cursorOffsetInToken = tempOffset
+                } else if (range.startContainer === editableRegionNode) {
+                  // Caret is on the editable region span itself
+                  if (
+                    savedCursorRef.current &&
+                    savedCursorRef.current.index === activeIndex
+                  ) {
+                    cursorOffsetInToken = savedCursorRef.current.offset
+                  } else {
+                    let currentTextLength = 0
+                    const regionText = editableRegionNode.textContent || ''
+                    currentTextLength =
+                      regionText === ZWS ? 0 : regionText.length
+                    // If range.startOffset is 0, it's start; otherwise, could be end or child index.
+                    // We rely on currentTokenText for max length later.
+                    cursorOffsetInToken =
+                      range.startOffset === 0 ? 0 : currentTextLength
+                  }
+                }
+              } else if (range.startContainer === activeTokenElement) {
+                // Selection is on the token element itself, but there's an editable region.
+                if (
+                  savedCursorRef.current &&
+                  savedCursorRef.current.index === activeIndex
+                ) {
+                  cursorOffsetInToken = savedCursorRef.current.offset
+                } else {
+                  let currentTextLength = 0
+                  const regionText = editableRegionNode.textContent || ''
+                  currentTextLength = regionText === ZWS ? 0 : regionText.length
+                  cursorOffsetInToken = currentTextLength // Default to end of content within editable region
+                }
+              } else {
+                // Selection anchor is within activeTokenElement but not editableRegionNode or activeTokenElement itself.
+                // This is an unusual case. Fallback to savedCursorRef.
+                if (
+                  savedCursorRef.current &&
+                  savedCursorRef.current.index === activeIndex
+                ) {
+                  cursorOffsetInToken = savedCursorRef.current.offset
+                }
+              }
+            } else {
+              // Simple token case (no editable region)
+              if (
+                range.startContainer.nodeType === Node.TEXT_NODE &&
+                activeTokenElement.contains(range.startContainer)
+              ) {
+                // Ensure the text node is a direct child or we sum offsets if it's nested simply
+                let tempOffset = 0
+                const parentIsActiveToken =
+                  range.startContainer.parentElement === activeTokenElement
+                if (parentIsActiveToken) {
+                  tempOffset = range.startOffset
+                } else {
+                  // Handle cases where text node might be wrapped in simple, non-functional spans inside the token
+                  let current = range.startContainer
+                  let accumulatedOffset = range.startOffset
+                  while (
+                    current &&
+                    current !== activeTokenElement &&
+                    current.parentElement !== activeTokenElement
+                  ) {
+                    let sibling = current.previousSibling
+                    while (sibling) {
+                      accumulatedOffset += (sibling.textContent || '').length
+                      sibling = sibling.previousSibling
+                    }
+                    current = current.parentElement
+                  }
+                  tempOffset = accumulatedOffset
+                }
+                cursorOffsetInToken = tempOffset
+              } else if (range.startContainer === activeTokenElement) {
+                if (
+                  savedCursorRef.current &&
+                  savedCursorRef.current.index === activeIndex
+                ) {
+                  cursorOffsetInToken = savedCursorRef.current.offset
+                } else {
+                  cursorOffsetInToken =
+                    range.startOffset === 0 ? 0 : currentTokenText.length
+                }
+              }
+            }
+
+            // ZWS correction for empty editable text (applied after specific calculations)
+            if (currentTokenText === '' && cursorOffsetInToken === 1) {
+              // If the effective text is empty, and raw offset (e.g. from ZWS) is 1, treat as 0.
+              const rawTextContent = editableRegionNode
+                ? editableRegionNode.textContent
+                : activeTokenElement.textContent
+              if (rawTextContent === ZWS) {
+                cursorOffsetInToken = 0
+              }
+            }
+          } else if (
+            savedCursorRef.current &&
+            savedCursorRef.current.index === activeIndex
+          ) {
+            // Fallback to savedCursorRef if DOM selection is not usable, not within the token, or not available
+            cursorOffsetInToken = savedCursorRef.current.offset
+          }
+
+          // Final clamping
+          cursorOffsetInToken = Math.max(
+            0,
+            Math.min(cursorOffsetInToken, currentTokenText.length)
+          )
+
+          const textBeforeCursor = currentTokenText.substring(
+            0,
+            cursorOffsetInToken
+          )
+          const textAfterCursor =
+            currentTokenText.substring(cursorOffsetInToken)
+
+          const parsedTokenBefore = parseToken(textBeforeCursor)
+          const parsedTokenAfter = parseToken(textAfterCursor)
+
+          if (parsedTokenBefore !== null && parsedTokenAfter !== null) {
+            const newTokens = [...tokens]
+            newTokens[activeIndex] = parsedTokenBefore
+            newTokens.splice(activeIndex + 1, 0, parsedTokenAfter)
+
+            const newSpacerCharsList = [...spacerChars]
+            // Ensure spacer list is long enough
+            while (newSpacerCharsList.length < activeIndex) {
+              newSpacerCharsList.push(null)
+            }
+            const originalSpacerAfterCurrentToken =
+              newSpacerCharsList[activeIndex]
+            newSpacerCharsList[activeIndex] = '\n' // Newline spacer after the first part
+            // Insert the original spacer (or null) after the second part
+            newSpacerCharsList.splice(
+              activeIndex + 1,
+              0,
+              originalSpacerAfterCurrentToken ?? null
+            )
+
+            // Adjust length if originalSpacerAfterCurrentToken was undefined and activeIndex was last
+            while (
+              newSpacerCharsList.length < newTokens.length - 1 &&
+              newTokens.length > 1
+            ) {
+              newSpacerCharsList.push(null)
+            }
+            if (
+              newSpacerCharsList.length > newTokens.length - 1 &&
+              newTokens.length > 0
+            ) {
+              newSpacerCharsList.length = Math.max(0, newTokens.length - 1)
+            }
+
+            setTokens(newTokens)
+            setSpacerChars(newSpacerCharsList)
+
+            savedCursorRef.current = { index: activeIndex + 1, offset: 0 }
+            programmaticCursorExpectationRef.current = savedCursorRef.current
+            setCaretState(savedCursorRef.current)
+            forceImmediateRestoreRef.current = true
+          }
+        } else if (tokens.length === 0) {
+          // Inlay is empty, create two tokens with a newline spacer
+          const firstToken = parseToken('')
+          const secondToken = parseToken('')
+          if (firstToken !== null && secondToken !== null) {
+            setTokens([firstToken, secondToken])
+            setSpacerChars(['\n'])
+            savedCursorRef.current = { index: 1, offset: 0 }
+            programmaticCursorExpectationRef.current = savedCursorRef.current
+            setCaretState(savedCursorRef.current)
+            forceImmediateRestoreRef.current = true
+          }
+        } else {
+          // No active editable token, try to append a newline and new token at the end
+          const lastTokenIndex = tokens.length - 1
+          const newEmptyToken = parseToken('')
+          if (newEmptyToken !== null) {
+            const newTokens = [...tokens, newEmptyToken]
+            const newSpacerCharsList = [...spacerChars]
+            while (newSpacerCharsList.length < lastTokenIndex) {
+              newSpacerCharsList.push(null)
+            }
+            newSpacerCharsList[lastTokenIndex] = '\n'
+            // Ensure spacer list matches new token structure
+            while (
+              newSpacerCharsList.length < newTokens.length - 1 &&
+              newTokens.length > 1
+            ) {
+              newSpacerCharsList.push(null)
+            }
+            if (
+              newSpacerCharsList.length > newTokens.length - 1 &&
+              newTokens.length > 0
+            ) {
+              newSpacerCharsList.length = Math.max(0, newTokens.length - 1)
+            }
+
+            setTokens(newTokens)
+            setSpacerChars(newSpacerCharsList)
+            savedCursorRef.current = { index: tokens.length, offset: 0 } // cursor on the new empty token
+            programmaticCursorExpectationRef.current = savedCursorRef.current
+            setCaretState(savedCursorRef.current)
+            forceImmediateRestoreRef.current = true
+          }
+        }
+        return
+      }
+      // --- SHIFT+ENTER FOR MULTILINE --- END ---
+
       if (
         onCharInput &&
         (e.key.length === 1 ||
@@ -1957,7 +2238,8 @@ export function useKeydownHandler<T>(props: UseKeydownHandlerProps<T>) {
       history, // Destructure
       isRestoringHistoryRef, // Destructure
       setCaretState, // Destructure
-      lastOperationTypeRef
+      lastOperationTypeRef,
+      multiline // Add multiline to dependency array
     ]
   )
 

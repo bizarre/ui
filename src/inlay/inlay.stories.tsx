@@ -407,6 +407,7 @@ export const TwitterMentions = () => {
                 className="w-full outline-none"
                 caret={caret}
                 onCaretChange={setCaret}
+                multiline
               >
                 {tokens.map((token, index) => (
                   <TweetInlay.Token key={index} index={index} editable>
