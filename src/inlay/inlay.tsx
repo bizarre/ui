@@ -145,13 +145,7 @@ const _Inlay = <T,>(
   const renderSpacer = React.useCallback(
     (spacerChar: string, afterTokenIndex: number): React.ReactNode => {
       if (multiline && spacerChar === '\n') {
-        return (
-          <br
-            data-newline-spacer-after-token={afterTokenIndex}
-            contentEditable={false}
-            suppressContentEditableWarning
-          />
-        )
+        return '\n'
       }
       if (typeof memoizedDisplayCommitCharSpacer === 'function') {
         return memoizedDisplayCommitCharSpacer(spacerChar, afterTokenIndex)
@@ -1042,7 +1036,11 @@ const _Inlay = <T,>(
         onKeyDown={onKeyDownEventHandler}
         onFocus={onRootFocus}
         ref={composeRefs(forwardedRef, ref)}
-        style={{ ...style, position: 'relative' }}
+        style={{
+          ...style,
+          position: 'relative',
+          ...(multiline && { whiteSpace: 'pre-wrap' })
+        }}
         className={combinedClassName}
         {...props}
       >
