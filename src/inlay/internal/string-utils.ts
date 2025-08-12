@@ -176,3 +176,55 @@ export function groupMatchesByMatcher<M extends Match<any, string>>(
 
   return grouped as any
 }
+
+// --- Grapheme segmentation helpers ---
+// These utilities provide consistent grapheme cluster boundaries across engines.
+// They are intentionally here since they operate purely on strings.
+import Graphemer from 'graphemer'
+
+const graphemeSplitter = new Graphemer()
+
+export function prevGraphemeStart(text: string, index: number): number {
+  if (index <= 0) return 0
+  let pos = 0
+  for (const cluster of graphemeSplitter.iterateGraphemes(text)) {
+    const next = pos + cluster.length
+    if (next >= index) return pos
+    pos = next
+  }
+  return pos
+}
+
+export function nextGraphemeEnd(text: string, index: number): number {
+  if (index >= text.length) return text.length
+  let pos = 0
+  for (const cluster of graphemeSplitter.iterateGraphemes(text)) {
+    const next = pos + cluster.length
+    if (index < next) return next
+    pos = next
+  }
+  return text.length
+}
+
+export function snapGraphemeStart(text: string, index: number): number {
+  if (index <= 0) return 0
+  let pos = 0
+  for (const cluster of graphemeSplitter.iterateGraphemes(text)) {
+    const next = pos + cluster.length
+    if (index < next) return pos
+    pos = next
+  }
+  return pos
+}
+
+export function snapGraphemeEnd(text: string, index: number): number {
+  if (index >= text.length) return text.length
+  let pos = 0
+  for (const cluster of graphemeSplitter.iterateGraphemes(text)) {
+    const next = pos + cluster.length
+    if (index <= pos) return pos
+    if (index <= next) return next
+    pos = next
+  }
+  return pos
+}

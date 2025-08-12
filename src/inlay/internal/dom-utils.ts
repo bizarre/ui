@@ -278,3 +278,23 @@ export const setDomSelection = (
     }
   }
 }
+
+export const serializeRawFromDom = (root: HTMLElement): string => {
+  const clone = root.cloneNode(true) as HTMLElement
+  const getRenderedLen = (el: Element): number => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null)
+    let total = 0
+    let n: Node | null
+    while ((n = walker.nextNode())) total += (n.textContent || '').length
+    return total
+  }
+  const tokenEls = clone.querySelectorAll('[data-token-text]')
+  tokenEls.forEach((el) => {
+    const raw = el.getAttribute('data-token-text') || ''
+    const renderedLen = getRenderedLen(el)
+    if (renderedLen !== raw.length) {
+      ;(el as HTMLElement).textContent = raw
+    }
+  })
+  return (clone as HTMLElement).innerText
+}
