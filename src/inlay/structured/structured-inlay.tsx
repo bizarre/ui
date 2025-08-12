@@ -38,9 +38,11 @@ export const StructuredInlay = <
 
   const rootRef = React.useRef<InlayRef | null>(null)
 
-  // Live token metadata separate from raw text value
-  type AnyMatch = Match<any>
-  const [liveTokens, setLiveTokens] = React.useState<AnyMatch[]>([])
+  // Stable token ids for metadata and render keys
+  type LiveToken = Match<any> & { id: string }
+  const [liveTokens, setLiveTokens] = React.useState<LiveToken[]>([])
+  const idCounterRef = React.useRef(0)
+  const nextId = React.useCallback(() => `tok_${++idCounterRef.current}`, [])
 
   // Sync live token metadata with current value; preserve metadata where possible
   React.useEffect(() => {
@@ -50,11 +52,12 @@ export const StructuredInlay = <
 
     setLiveTokens((currentTokens) => {
       // Build groups of OLD tokens keyed by matcher+raw, sorted by start
-      type Group = { list: AnyMatch[]; starts: number[]; used: boolean[] }
+      type Group = { list: LiveToken[]; starts: number[]; used: boolean[] }
       const oldGroups = new Map<string, Group>()
-      const makeKey = (m: AnyMatch) => `${m.matcher}__SEP__${m.raw}`
+      const makeKey = (m: Match<any>) => `${m.matcher}__SEP__${m.raw}`
 
-      const byStart = (a: AnyMatch, b: AnyMatch) => a.start - b.start
+      const byStart = (a: { start: number }, b: { start: number }) =>
+        a.start - b.start
       const lowerBound = (arr: number[], target: number) => {
         let lo = 0,
           hi = arr.length
@@ -81,13 +84,13 @@ export const StructuredInlay = <
         g.used = new Array(g.list.length).fill(false)
       }
 
-      // For each NEW match, find nearest unused OLD in the same group
-      const updatedTokens: AnyMatch[] = []
+      // For each NEW match, find nearest unused OLD in the same group and adopt its id
+      const updatedTokens: LiveToken[] = []
       for (const nm of newMatches) {
         const key = makeKey(nm)
         const g = oldGroups.get(key)
         if (!g || g.list.length === 0) {
-          updatedTokens.push(nm)
+          updatedTokens.push({ ...nm, id: nextId() })
           continue
         }
 
@@ -123,18 +126,22 @@ export const StructuredInlay = <
         if (bestIdx !== -1) {
           g.used[bestIdx] = true
           const oldMatch = g.list[bestIdx]
-          updatedTokens.push({ ...nm, data: { ...oldMatch.data } as any })
+          updatedTokens.push({
+            ...nm,
+            id: oldMatch.id,
+            data: { ...oldMatch.data }
+          })
         } else {
-          updatedTokens.push(nm)
+          updatedTokens.push({ ...nm, id: nextId() })
         }
       }
 
       return updatedTokens
     })
-  }, [value, plugins])
+  }, [value, plugins, nextId])
 
   const replaceToken = React.useCallback(
-    (tokenToReplace: AnyMatch, newText: string) => {
+    (tokenToReplace: LiveToken, newText: string) => {
       const targetCaret = tokenToReplace.start + newText.length
 
       flushSync(() => {
@@ -166,7 +173,7 @@ export const StructuredInlay = <
   )
 
   const updateToken = React.useCallback(
-    (tokenToUpdate: AnyMatch, newData: any) => {
+    (tokenToUpdate: LiveToken, newData: any) => {
       // Capture current selection absolute offsets relative to the editor root
       const rootEl = rootRef.current?.root
       let capturedSelection: { start: number; end: number } | null = null
@@ -191,11 +198,7 @@ export const StructuredInlay = <
       flushSync(() => {
         setLiveTokens((currentTokens) =>
           currentTokens.map((token) => {
-            if (
-              token.matcher === tokenToUpdate.matcher &&
-              token.start === tokenToUpdate.start &&
-              token.raw === tokenToUpdate.raw
-            ) {
+            if (token.id === tokenToUpdate.id) {
               return {
                 ...token,
                 data: { ...(token.data as any), ...newData }
@@ -226,15 +229,16 @@ export const StructuredInlay = <
   )
 
   const tokenChildren = liveTokens
-    .map((match, index) => {
+    .map((match) => {
       const plugin = plugins.find((p) => p.matcher.name === match.matcher)
       if (!plugin) return null
 
       return (
         <Base.Token
-          key={`${match.matcher}-${match.start}-${index}`}
+          key={match.id}
           value={match.raw}
           data-token-matcher={match.matcher}
+          data-token-id={match.id}
         >
           {plugin.render({
             token: match.data as any,
@@ -276,6 +280,7 @@ export const StructuredInlay = <
 
           if (!activePlugin) return null
 
+          // Map the active raw range to our live token by start/end (id is not available in props reliably)
           const activeMatch = liveTokens.find(
             (m) => m.start === activeToken.start && m.end === activeToken.end
           )
