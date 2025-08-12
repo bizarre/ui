@@ -4,6 +4,7 @@ import { render, act, waitFor } from '@testing-library/react'
 import { StructuredInlay } from '../../structured/structured-inlay'
 import { createRegexMatcher } from '../../internal/string-utils'
 import { getAbsoluteOffset, setDomSelection } from '../../internal/dom-utils'
+import type { Plugin } from '../../structured/plugins/plugin'
 
 function flush() {
   return new Promise((r) => setTimeout(r, 0))
@@ -11,30 +12,37 @@ function flush() {
 
 describe('StructuredInlay replace/update behavior', () => {
   it('update changes rendered label without changing raw; replace moves caret to end', async () => {
-    const matcher = createRegexMatcher<{ raw: string; label?: string }, 'a'>(
-      'a',
-      {
-        regex: /@a/g,
-        transform: (m) => ({ raw: m[0] })
-      }
-    )
+    type T = { raw: string; label?: string }
+    const matcher = createRegexMatcher<T, 'a'>('a', {
+      regex: /@a/g,
+      transform: (m) => ({ raw: m[0] })
+    })
 
     let doReplace: ((s: string) => void) | null = null
-    let doUpdate: ((d: any) => void) | null = null
+    let doUpdate: ((d: Partial<T>) => void) | null = null
 
-    const plugins = [
+    const plugins: Array<Plugin<unknown, T, 'a'>> = [
       {
         matcher,
-        render: ({ token }: any) => (
+        render: ({ token }: { token: T }) => (
           <span data-testid="tok">{token.label ?? token.raw}</span>
         ),
-        portal: ({ replace, update }: any) => {
+        portal: ({
+          replace,
+          update
+        }: {
+          replace: (s: string) => void
+          update: (d: Partial<T>) => void
+        }) => {
           doReplace = replace
           doUpdate = update
           return null
-        }
+        },
+        onInsert: () => {},
+        onKeyDown: () => false,
+        props: {} as unknown
       }
-    ] as any
+    ]
 
     function Test() {
       const [value, setValue] = React.useState('@a')
@@ -71,7 +79,9 @@ describe('StructuredInlay replace/update behavior', () => {
 
     // 1) update changes rendered label but not raw token text
     await act(async () => {
-      doUpdate && doUpdate({ label: 'X' })
+      if (doUpdate) {
+        doUpdate({ label: 'X' })
+      }
       await flush()
     })
     await waitFor(() => {
@@ -86,7 +96,9 @@ describe('StructuredInlay replace/update behavior', () => {
 
     // 2) replace moves caret to end of inserted text
     await act(async () => {
-      doReplace && doReplace('@alex')
+      if (doReplace) {
+        doReplace('@alex')
+      }
       await flush()
     })
     await waitFor(() => {
@@ -94,6 +106,59 @@ describe('StructuredInlay replace/update behavior', () => {
       const sel = window.getSelection()!
       const caret = getAbsoluteOffset(root, sel.focusNode!, sel.focusOffset)
       expect(caret).toBe('@alex'.length)
+    })
+  })
+
+  it('uses custom getPortalAnchorRect when provided (smoke)', async () => {
+    type T2 = { raw: string }
+    const matcher = createRegexMatcher<T2, 'a'>('a', {
+      regex: /@a/g,
+      transform: (m) => ({ raw: m[0] })
+    })
+
+    const plugins: Array<Plugin<unknown, T2, 'a'>> = [
+      {
+        matcher,
+        render: ({ token }: { token: T2 }) => <span>{token.raw}</span>,
+        portal: () => <div data-testid="portal">P</div>,
+        onInsert: () => {},
+        onKeyDown: () => false,
+        props: {} as unknown
+      }
+    ]
+
+    const spy: Array<DOMRect> = []
+
+    function Test() {
+      const [value, setValue] = React.useState('@a')
+      return (
+        <StructuredInlay
+          value={value}
+          onChange={setValue}
+          plugins={plugins}
+          data-testid="root"
+          getPortalAnchorRect={(root) => {
+            const r = root
+              ? root.getBoundingClientRect()
+              : new DOMRect(0, 0, 0, 0)
+            const rect = new DOMRect(r.left, r.top, 0, 0)
+            spy.push(rect)
+            return rect
+          }}
+        />
+      )
+    }
+
+    const { getByTestId } = render(<Test />)
+    // Force a selection to cause portal logic to run and the popover to open
+    await act(async () => {
+      const root = getByTestId('root') as HTMLElement
+      setDomSelection(root, 1)
+      await flush()
+    })
+
+    await waitFor(() => {
+      expect(spy.length).toBeGreaterThan(0)
     })
   })
 })

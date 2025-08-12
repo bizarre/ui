@@ -12,6 +12,8 @@ import React from 'react'
 type StructuredInlayProps<T extends readonly Plugin<any, any, any>[]> = {
   plugins?: T
   portalProps?: Omit<React.ComponentProps<typeof Base.Portal>, 'children'>
+  portalAnchor?: 'selection' | 'root'
+  getPortalAnchorRect?: (root: HTMLDivElement | null) => DOMRect
 } & Omit<React.ComponentProps<typeof Base.Root>, 'children'> & {
     children?: React.ReactNode
   }
@@ -24,6 +26,8 @@ export const StructuredInlay = <
   onChange: onChangeProp,
   plugins = [] as unknown as T,
   portalProps,
+  portalAnchor = 'selection',
+  getPortalAnchorRect,
   ...rest
 }: StructuredInlayProps<T>) => {
   const [value, setValue] = useControllableState({
@@ -242,7 +246,23 @@ export const StructuredInlay = <
     .filter(Boolean)
 
   return (
-    <Base.Root ref={rootRef} value={value} onChange={setValue} {...rest}>
+    <Base.Root
+      ref={rootRef}
+      value={value}
+      onChange={setValue}
+      getPopoverAnchorRect={
+        getPortalAnchorRect
+          ? getPortalAnchorRect
+          : portalAnchor === 'root'
+            ? (root) => {
+                if (!root) return new DOMRect(0, 0, 0, 0)
+                const r = root.getBoundingClientRect()
+                return new DOMRect(r.left, r.bottom, 0, 0)
+              }
+            : undefined
+      }
+      {...rest}
+    >
       {tokenChildren}
       <Base.Portal {...portalProps}>
         {({ activeToken, activeTokenState }) => {

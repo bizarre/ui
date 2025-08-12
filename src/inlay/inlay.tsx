@@ -105,6 +105,8 @@ export type InlayProps = ScopedProps<
     'onChange' | 'defaultValue' | 'onKeyDown'
   > & {
       onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => boolean // Return true to stop propagation
+    } & {
+      getPopoverAnchorRect?: (root: HTMLDivElement | null) => DOMRect
     }
 >
 
@@ -123,6 +125,7 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
     onKeyDown: onKeyDownProp,
     placeholder,
     multiline = true,
+    getPopoverAnchorRect,
     ...inlayProps
   } = props
 
@@ -147,6 +150,24 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
   const virtualAnchorRef = useRef({
     getBoundingClientRect: () => lastAnchorRectRef.current
   })
+  const customAnchorRef = useRef({
+    getBoundingClientRect: () => new DOMRect(0, 0, 0, 0)
+  })
+  useLayoutEffect(() => {
+    if (!getPopoverAnchorRect) return
+    customAnchorRef.current.getBoundingClientRect = () => {
+      try {
+        const root = editorRef.current
+        const rect = getPopoverAnchorRect(root)
+        return rect ?? new DOMRect(0, 0, 0, 0)
+      } catch {
+        return new DOMRect(0, 0, 0, 0)
+      }
+    }
+  }, [getPopoverAnchorRect])
+  const chosenAnchorRef = getPopoverAnchorRect
+    ? customAnchorRef
+    : virtualAnchorRef
   const popoverControl = useMemo(() => ({ setOpen: setIsPopoverOpen }), [])
   const [value, setValue] = useControllableState({
     prop: valueProp,
@@ -282,7 +303,7 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
   return (
     <PopoverControlContext.Provider value={popoverControl}>
       <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-        <Popover.Anchor virtualRef={virtualAnchorRef} />
+        <Popover.Anchor virtualRef={chosenAnchorRef} />
         <InternalInlayProvider scope={__scope} registerToken={registerToken}>
           <PublicInlayProvider
             scope={__scope}
