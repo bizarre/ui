@@ -239,6 +239,7 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
     suppressNextKeydownCommitRef,
     compositionCommitKeyRef,
     compositionJustEndedAtRef,
+    contentKey,
     onCompositionStart,
     onCompositionUpdate,
     onCompositionEnd
@@ -325,6 +326,7 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
               <div
                 {...inlayProps}
                 ref={editorRef}
+                key={contentKey}
                 contentEditable
                 role="textbox"
                 aria-multiline={multiline}

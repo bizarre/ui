@@ -642,3 +642,5 @@ describe('Inlay multiline prop', () => {
     expect(ed.querySelector('br')).toBeFalsy()
   })
 })
+
+// (IME composition tests removed; to be covered in Playwright later)

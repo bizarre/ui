@@ -9,6 +9,7 @@ export function useComposition(
   getCurrentValue: () => string
 ) {
   const [isComposing, setIsComposing] = useState(false)
+  const [contentKey, setContentKey] = useState(0)
   const isComposingRef = useRef(false)
   const compositionStartSelectionRef = useRef<{
     start: number
@@ -19,19 +20,7 @@ export function useComposition(
   const suppressNextKeydownCommitRef = useRef<null | 'enter' | 'space'>(null)
   const compositionCommitKeyRef = useRef<'enter' | 'space' | null>(null)
   const compositionJustEndedAtRef = useRef<number>(0)
-  const isWebKitSafari = (() => {
-    if (typeof navigator === 'undefined') return false
-    const ua = navigator.userAgent
-    const isSafari =
-      /Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Opera/i.test(ua)
-    return (
-      isSafari ||
-      (/AppleWebKit/i.test(ua) &&
-        /Mobile/i.test(ua) &&
-        !/Android/i.test(ua) &&
-        !/CriOS/i.test(ua))
-    )
-  })()
+  // Engine detection no longer required; suppression is applied for all engines
 
   const onCompositionStart = useCallback(() => {
     if (!editorRef.current) return
@@ -68,7 +57,7 @@ export function useComposition(
       suppressNextBeforeInputRef.current = true
 
       // Build committed value
-      let committed = event.data || ''
+      let committed = (event as unknown as { data?: string }).data || ''
       const baseValue = compositionInitialValueRef.current ?? getCurrentValue()
       const range = compositionStartSelectionRef.current ?? { start: 0, end: 0 }
       const len = baseValue.length
@@ -91,10 +80,14 @@ export function useComposition(
 
       setValue(() => before + committed + after)
 
-      if (isWebKitSafari) {
-        suppressNextKeydownCommitRef.current = 'enter'
-        compositionJustEndedAtRef.current = Date.now()
-      }
+      // Force a remount to purge any transient IME DOM artifacts left behind
+      setContentKey((k) => k + 1)
+
+      // One-shot suppress the immediate commit keydown regardless of engine
+      // Prefer the key recorded during composition; default to 'enter'
+      suppressNextKeydownCommitRef.current =
+        compositionCommitKeyRef.current ?? 'enter'
+      compositionJustEndedAtRef.current = Date.now()
 
       requestAnimationFrame(() => {
         const r = editorRef.current
@@ -125,6 +118,7 @@ export function useComposition(
     suppressNextKeydownCommitRef,
     compositionCommitKeyRef,
     compositionJustEndedAtRef,
+    contentKey,
     onCompositionStart,
     onCompositionUpdate,
     onCompositionEnd

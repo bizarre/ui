@@ -7,6 +7,19 @@ import {
   snapGraphemeStart
 } from '../internal/string-utils'
 
+const isJsdom =
+  typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent || '')
+
+function scheduleSelection(cb: () => void) {
+  if (isJsdom) {
+    setTimeout(cb, 0)
+  } else if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(cb)
+  } else {
+    setTimeout(cb, 0)
+  }
+}
+
 export type KeyHandlersConfig = {
   editorRef: React.RefObject<HTMLDivElement | null>
   multiline: boolean
@@ -68,8 +81,9 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
         return
       }
 
+      // Immediately after compositionend, WebKit may fire an extra beforeinput inserting a newline.
+      // Block it within a short window regardless of current composition state.
       if (
-        cfg.isComposingRef.current &&
         cfg.compositionJustEndedAtRef.current &&
         Date.now() - cfg.compositionJustEndedAtRef.current < 50 &&
         (inputType === 'insertParagraph' || inputType === 'insertLineBreak')
@@ -162,7 +176,11 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
               newSelection = adjStart
             }
           }
-          setTimeout(() => setDomSelection(editorRef.current!, newSelection), 0)
+          scheduleSelection(() => {
+            const root = editorRef.current
+            if (!root || !root.isConnected) return
+            setDomSelection(root, newSelection)
+          })
           return before + after
         })
         return
@@ -194,7 +212,11 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
         const after = currentValue.slice(safeEnd)
         const newValue = before + data + after
         const newSelection = safeStart + data.length
-        setTimeout(() => setDomSelection(editorRef.current!, newSelection), 0)
+        scheduleSelection(() => {
+          const root = editorRef.current
+          if (!root || !root.isConnected) return
+          setDomSelection(root, newSelection)
+        })
         return newValue
       })
     },
@@ -203,6 +225,21 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // One-shot suppression for the immediate keydown fired after compositionend (WebKit bug)
+      if (cfg.suppressNextKeydownCommitRef.current) {
+        const sup = cfg.suppressNextKeydownCommitRef.current
+        const isEnter = event.key === 'Enter' || event.key === 'Return'
+        const isSpace = event.key === ' '
+        if ((sup === 'enter' && isEnter) || (sup === 'space' && isSpace)) {
+          event.preventDefault()
+          event.stopPropagation()
+          cfg.suppressNextKeydownCommitRef.current = null
+          return
+        }
+        // Clear suppression if next key is different
+        cfg.suppressNextKeydownCommitRef.current = null
+      }
+
       if (cfg.onKeyDownProp?.(event)) return
 
       if (!cfg.multiline && event.key === 'Enter') {
@@ -282,7 +319,11 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
           const after = currentValue.slice(safeEnd)
           const newValue = before + '\n' + after
           const newSelection = safeStart + 1
-          setTimeout(() => setDomSelection(editorRef.current!, newSelection), 0)
+          scheduleSelection(() => {
+            const root = editorRef.current
+            if (!root || !root.isConnected) return
+            setDomSelection(root, newSelection)
+          })
           return newValue
         })
       }
@@ -298,7 +339,11 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
           const after = currentValue.slice(safeEnd)
           const newValue = before + ' ' + after
           const newSelection = safeStart + 1
-          setTimeout(() => setDomSelection(editorRef.current!, newSelection), 0)
+          scheduleSelection(() => {
+            const root = editorRef.current
+            if (!root || !root.isConnected) return
+            setDomSelection(root, newSelection)
+          })
           return newValue
         })
       }
@@ -351,7 +396,11 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
               newSelection = adjStart
             }
           }
-          setTimeout(() => setDomSelection(editorRef.current!, newSelection), 0)
+          scheduleSelection(() => {
+            const root = editorRef.current
+            if (!root || !root.isConnected) return
+            setDomSelection(root, newSelection)
+          })
           return before + after
         })
       }
@@ -404,7 +453,11 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
               newSelection = adjStart
             }
           }
-          setTimeout(() => setDomSelection(editorRef.current!, newSelection), 0)
+          scheduleSelection(() => {
+            const root = editorRef.current
+            if (!root || !root.isConnected) return
+            setDomSelection(root, newSelection)
+          })
           return before + after
         })
       }
