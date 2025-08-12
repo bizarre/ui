@@ -3,7 +3,7 @@ import { useLayoutEffect } from 'react'
 export function usePlaceholderSync(
   editorRef: React.RefObject<HTMLDivElement | null>,
   placeholderRef: React.RefObject<HTMLDivElement | null>,
-  deps: any[]
+  deps: unknown[]
 ) {
   useLayoutEffect(() => {
     if (editorRef.current && placeholderRef.current) {
@@ -27,7 +27,8 @@ export function usePlaceholderSync(
       stylesToCopy.forEach((styleName) => {
         const v = editorStyles[styleName]
         if (v !== null) {
-          placeholderRef.current!.style[styleName as any] = v as string
+          // @ts-expect-error - Style name is a valid CSSStyleDeclaration property
+          placeholderRef.current!.style[styleName] = v as string
         }
       })
       placeholderRef.current!.style.borderStyle = editorStyles.borderStyle

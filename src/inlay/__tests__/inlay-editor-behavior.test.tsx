@@ -548,7 +548,6 @@ describe('Inlay grapheme advanced cases', () => {
       )
     }
     const { getByTestId } = render(<Test />)
-    const ed = getByTestId('ed') as HTMLElement
 
     const mid = 1 + Math.floor(cluster.length / 2)
     await act(async () => {

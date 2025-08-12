@@ -25,6 +25,11 @@ export type KeyHandlersConfig = {
   getActiveToken: () => { start: number; end: number } | null
 }
 
+type NativeInputEvent = InputEvent & {
+  inputType?: string
+  data?: string | null
+}
+
 function selectionIntersectsToken(editor: HTMLElement): boolean {
   const sel = window.getSelection()
   if (!sel || sel.rangeCount === 0) return false
@@ -32,8 +37,9 @@ function selectionIntersectsToken(editor: HTMLElement): boolean {
   const tokens = editor.querySelectorAll('[data-token-text]')
   for (let i = 0; i < tokens.length; i++) {
     const el = tokens[i]
-    if (typeof (rng as any).intersectsNode === 'function') {
-      if ((rng as any).intersectsNode(el)) return true
+    const rangeIntersects = rng.intersectsNode
+    if (typeof rangeIntersects === 'function') {
+      if (rangeIntersects.call(rng, el)) return true
     } else {
       const tr = document.createRange()
       tr.selectNode(el)
@@ -52,7 +58,7 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
       const { editorRef } = cfg
       if (!editorRef.current) return
 
-      const nativeAny = event.nativeEvent as any
+      const nativeAny = event.nativeEvent as unknown as NativeInputEvent
       const data: string | null | undefined = nativeAny.data
       const inputType: string | undefined = nativeAny.inputType
 

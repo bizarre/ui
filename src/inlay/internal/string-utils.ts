@@ -58,7 +58,7 @@ export type Matcher<T = unknown, N extends string = string> = {
  *          The type of each element is a discriminated union of all possible `Match` types.
  *          Consumers can switch on `match.matcher` to safely access `match.data`.
  */
-export function scan<const M extends readonly Matcher<any>[]>(
+export function scan<const M extends readonly Matcher<unknown>[]>(
   text: string,
   matchers: M
 ): MatchFromMatcher<M[number]>[] {
@@ -141,7 +141,7 @@ export function createRegexMatcher<T, const N extends string>(
  *          with the `data` property correctly typed.
  */
 export function filterMatchesByMatcher<
-  M extends Match<any, any>,
+  M extends Match<unknown, string>,
   N extends M['matcher']
 >(matches: readonly M[], matcherName: N): Extract<M, { matcher: N }>[] {
   return matches.filter(
@@ -157,7 +157,7 @@ export function filterMatchesByMatcher<
  * @returns A record where keys are matcher names and values are arrays of matches
  *          from that matcher, with each array correctly typed.
  */
-export function groupMatchesByMatcher<M extends Match<any, string>>(
+export function groupMatchesByMatcher<M extends Match<unknown, string>>(
   matches: readonly M[]
 ): Partial<{ [N in M['matcher']]: Extract<M, { matcher: N }>[] }> {
   // We use a less specific type for `grouped` internally to work around a TypeScript
@@ -174,7 +174,9 @@ export function groupMatchesByMatcher<M extends Match<any, string>>(
     grouped[key].push(match)
   }
 
-  return grouped as any
+  return grouped as unknown as Partial<{
+    [N in M['matcher']]: Extract<M, { matcher: N }>[]
+  }>
 }
 
 // --- Grapheme segmentation helpers ---

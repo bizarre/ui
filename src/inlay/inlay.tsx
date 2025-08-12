@@ -17,12 +17,6 @@ import {
   setDomSelection,
   serializeRawFromDom as serializeFromDom
 } from './internal/dom-utils'
-import {
-  nextGraphemeEnd,
-  prevGraphemeStart,
-  snapGraphemeEnd,
-  snapGraphemeStart
-} from './internal/string-utils'
 import { useHistory } from './hooks/use-history'
 import { useSelection } from './hooks/use-selection'
 import { useTokenWeaver } from './hooks/use-token-weaver'
@@ -35,8 +29,7 @@ export const COMPONENT_NAME = 'Inlay'
 export const TEXT_COMPONENT_NAME = 'Inlay.Text'
 
 export type ScopedProps<P> = P & { __scope?: Scope }
-const [createInlayContext, createInlayScope] =
-  createContextScope(COMPONENT_NAME)
+const [createInlayContext] = createContextScope(COMPONENT_NAME)
 
 const AncestorContext = createContext<React.ReactElement | null>(null)
 const PopoverControlContext = createContext<{
@@ -51,12 +44,13 @@ function annotateWithAncestor(
     return node
   }
 
-  const element = node as React.ReactElement<any>
+  const element = node as React.ReactElement<{ children?: React.ReactNode }>
   const nextAncestor = currentAncestor ?? element
 
   const children = element.props.children
-  const wrappedChildren = React.Children.map(children, (child) =>
-    annotateWithAncestor(child, nextAncestor)
+  const wrappedChildren = React.Children.map(
+    children,
+    (child: React.ReactNode) => annotateWithAncestor(child, nextAncestor)
   )
 
   return (
@@ -170,7 +164,6 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
   } = useSelection(editorRef, value)
   const {
     isRegistered,
-    setIsRegistered,
     registerToken,
     weavedChildren,
     activeToken,

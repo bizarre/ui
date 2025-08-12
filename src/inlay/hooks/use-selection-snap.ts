@@ -70,7 +70,7 @@ export function useSelectionSnap(cfg: SelectionSnapConfig) {
               const asEl = curr as HTMLElement
               if (asEl.hasAttribute('data-token-text')) return asEl
             }
-            curr = (curr as any).parentNode || null
+            curr = curr.parentNode || null
           }
           return null
         }

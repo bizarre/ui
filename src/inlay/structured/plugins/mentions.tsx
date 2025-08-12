@@ -1,10 +1,7 @@
-import { Plugin } from './plugin'
-import {
-  createRegexMatcher,
-  scan,
-  filterMatchesByMatcher
-} from '../../internal/string-utils'
+import type { Plugin } from './plugin'
+import { createRegexMatcher } from '../../internal/string-utils'
 import { TokenState } from '../../inlay'
+import type React from 'react'
 
 type MentionData = {
   mention: string
@@ -46,10 +43,10 @@ export function mentions(
     matcher,
     render: props.render,
     portal: props.portal,
-    onInsert: (value: MentionData) => {
-      return value
+    onInsert: (): void => {
+      // no-op by default
     },
-    onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
+    onKeyDown: () => {
       return false
     }
   }

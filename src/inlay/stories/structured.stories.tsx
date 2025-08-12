@@ -69,7 +69,9 @@ const MentionToken = ({
   update
 }: {
   token: { mention: string; name?: string; avatar?: string }
-  update: (data: any) => void
+  update: (
+    data: Partial<{ mention: string; name?: string; avatar?: string }>
+  ) => void
 }) => {
   React.useEffect(() => {
     // If the token has a canonical ID but not a display name, fetch it.
@@ -107,7 +109,7 @@ export const Structured = () => {
               render: ({ token, update }) => (
                 <MentionToken token={token} update={update} />
               ),
-              portal: ({ token, state, replace }) => {
+              portal: ({ token, replace }) => {
                 if (token.name) return null
 
                 return (
