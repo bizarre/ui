@@ -326,6 +326,7 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
               <div
                 {...inlayProps}
                 ref={editorRef}
+                // required to clear browser-inserted IME text
                 key={contentKey}
                 contentEditable
                 role="textbox"

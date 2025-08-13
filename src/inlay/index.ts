@@ -1,1 +1,1 @@
-export * from './inlay'
+export { Root, Token, Portal } from './inlay'
