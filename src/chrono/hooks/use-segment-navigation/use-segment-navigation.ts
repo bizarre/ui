@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react'
-import type { DateRange } from '../use-time-slice-state'
+import type { DateRange } from '../use-chrono-state'
 import { addMonths, addDays, addHours, addMinutes, addYears } from 'date-fns'
 import '@formatjs/intl-datetimeformat/polyfill'
 import '@formatjs/intl-datetimeformat/locale-data/en'

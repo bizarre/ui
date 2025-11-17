@@ -15,8 +15,8 @@ import {
 import { ClientOnly } from 'vike-react/ClientOnly'
 import packageJson from '../../../package.json'
 import {
-  timeSliceBasicExample,
-  timeSliceImplementationExample
+  chronoBasicExample,
+  chronoImplementationExample
 } from '../../components/code-examples'
 import * as Collapsible from '@radix-ui/react-collapsible'
 
@@ -128,7 +128,7 @@ export default function Page() {
 
           {/* Component Accordion */}
           <div className="space-y-6">
-            {/* TimeSlice Component Accordion */}
+            {/* Chrono Component Accordion */}
             <Collapsible.Root defaultOpen className="w-full">
               <Collapsible.Trigger className="w-full group">
                 <div className="flex items-center justify-between py-3 px-4 bg-black/40 border border-zinc-800/80 rounded-lg hover:border-zinc-700/80 transition-colors">
@@ -138,7 +138,7 @@ export default function Page() {
                     </div>
                     <div className="flex flex-col items-start text-left flex-1">
                       <h3 className="text-lg sm:text-xl font-semibold text-white group-hover:text-white/90 transition-colors">
-                        TimeSlice
+                        Chrono
                       </h3>
                       <p className="text-zinc-400 text-sm sm:text-base leading-relaxed group-hover:text-zinc-300 transition-colors">
                         A flexible time range picker with built-in intelligence
@@ -261,26 +261,26 @@ export default function Page() {
                                 }
                                 fallback={<div />}
                               >
-                                {(TimeSliceExample) => (
+                                {(ChronoExample) => (
                                   <ComponentShowcaseDialog
-                                    title="TimeSlice Component"
-                                    description="TimeSlice is a flexible time range picker with natural language support, relative time handling, and keyboard navigation."
-                                    demoComponent={TimeSliceExample}
+                                    title="Chrono Component"
+                                    description="Chrono is a flexible time range picker with natural language support, relative time handling, and keyboard navigation."
+                                    demoComponent={ChronoExample}
                                     codeTabs={[
                                       {
                                         label: 'Basic',
                                         value: 'basic',
-                                        code: timeSliceBasicExample,
+                                        code: chronoBasicExample,
                                         language: 'tsx'
                                       },
                                       {
                                         label: 'Implementation',
                                         value: 'implementation',
-                                        code: timeSliceImplementationExample,
+                                        code: chronoImplementationExample,
                                         language: 'tsx'
                                       }
                                     ]}
-                                    docsLink="/storybook/?path=/story/timeslice"
+                                    docsLink="/storybook/?path=/story/chrono"
                                     trigger={
                                       <button className="text-xs flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800/80 px-2.5 py-1.5 rounded text-zinc-400 hover:text-zinc-300 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/30">
                                         <Code className="h-3.5 w-3.5" />
@@ -307,7 +307,7 @@ export default function Page() {
                                 </div>
                               }
                             >
-                              {(TimeSliceExample) => <TimeSliceExample />}
+                              {(ChronoExample) => <ChronoExample />}
                             </ClientOnly>
                           </div>
                         </div>

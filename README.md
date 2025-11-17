@@ -21,7 +21,7 @@ Or use `npm`, `yarn`, or `pnpm`. Whatever you like.
 
 ## 🧩 Components
 
-### `TimeSlice`
+### `Chrono`
 
 A smart, headless time range picker that speaks human.
 
@@ -38,7 +38,7 @@ A smart, headless time range picker that speaks human.
 #### 🛠 Basic Usage
 
 ```tsx
-import { TimeSlice } from '@bizarre/ui'
+import { Chrono } from '@bizarre/ui'
 
 function MyComponent() {
   const handleConfirm = (range) => {
@@ -46,19 +46,19 @@ function MyComponent() {
   }
 
   return (
-    <TimeSlice.Root onDateRangeConfirm={handleConfirm}>
-      <TimeSlice.Input />
-      <TimeSlice.Portal>
-        <TimeSlice.Shortcut duration={{ minutes: 15 }}>
+    <Chrono.Root onDateRangeConfirm={handleConfirm}>
+      <Chrono.Input />
+      <Chrono.Portal>
+        <Chrono.Shortcut duration={{ minutes: 15 }}>
           15 minutes
-        </TimeSlice.Shortcut>
-        <TimeSlice.Shortcut duration={{ hours: 1 }}>1 hour</TimeSlice.Shortcut>
-        <TimeSlice.Shortcut duration={{ days: 1 }}>1 day</TimeSlice.Shortcut>
-        <TimeSlice.Shortcut duration={{ months: 1 }}>
+        </Chrono.Shortcut>
+        <Chrono.Shortcut duration={{ hours: 1 }}>1 hour</Chrono.Shortcut>
+        <Chrono.Shortcut duration={{ days: 1 }}>1 day</Chrono.Shortcut>
+        <Chrono.Shortcut duration={{ months: 1 }}>
           1 month
-        </TimeSlice.Shortcut>
-      </TimeSlice.Portal>
-    </TimeSlice.Root>
+        </Chrono.Shortcut>
+      </Chrono.Portal>
+    </Chrono.Root>
   )
 }
 ```

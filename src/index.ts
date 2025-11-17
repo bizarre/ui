@@ -1,1 +1,1 @@
-export * as TimeSlice from './timeslice'
+export * as Chrono from './chrono'
