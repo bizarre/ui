@@ -66,9 +66,25 @@ export function scan<const M extends readonly Matcher<unknown>[]>(
     matcher.match(text).map((m) => ({ ...m, matcher: matcher.name }))
   ) as MatchFromMatcher<M[number]>[]
 
-  // The type of `allMatches` is correctly inferred as the discriminated union based on `matchers`,
-  // so a type assertion on the return is no longer necessary.
-  return allMatches.sort((a, b) => a.start - b.start)
+  // Sort by start position ascending, then by length descending (longest first at same position)
+  // This ensures the longest match at each position is considered first
+  allMatches.sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start
+    return b.end - b.start - (a.end - a.start)
+  })
+
+  // Greedy algorithm: accept non-overlapping matches, preferring longer ones
+  // When two matches overlap, the one starting earlier (or longer at same position) wins
+  const accepted: typeof allMatches = []
+  let lastEnd = -1
+  for (const match of allMatches) {
+    if (match.start >= lastEnd) {
+      accepted.push(match)
+      lastEnd = match.end
+    }
+  }
+
+  return accepted
 }
 
 /**
