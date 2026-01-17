@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/experimental-ct-react'
 import { DivergedTokenInlay } from './fixtures/diverged-token-inlay'
 
-test.describe('Clipboard operations with diverged tokens (CT)', () => {
+// Run clipboard tests serially to avoid clipboard state pollution between parallel tests
+test.describe.serial('Clipboard operations with diverged tokens (CT)', () => {
   test('Select all (Ctrl/Cmd+a) selects entire content', async ({
     mount,
     page
@@ -99,47 +100,40 @@ test.describe('Clipboard operations with diverged tokens (CT)', () => {
 
   test('Paste plain text into editor works correctly', async ({
     mount,
-    page,
-    context,
-    browserName
+    page
   }) => {
-    test.skip(
-      browserName !== 'chromium',
-      'Clipboard API permissions only work on Chromium'
-    )
-
     await mount(<DivergedTokenInlay initial="Hello " />)
 
     const ed = page.getByRole('textbox')
     await ed.click()
 
-    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-    await page.evaluate(() => navigator.clipboard.writeText('world'))
-
+    // Move to end
     for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight')
+
+    // Write to clipboard and paste using real keyboard shortcut
+    await page.evaluate(() => navigator.clipboard.writeText('world'))
     await page.keyboard.press('ControlOrMeta+v')
 
     await expect(ed).toHaveText('Hello world')
   })
 
-  test.fixme(
-    'Paste text that matches token pattern creates new token',
-    async ({ mount, page, context }) => {
-      await mount(<DivergedTokenInlay initial="Hi " />)
+  test('Paste text that matches token pattern creates new token', async ({
+    mount,
+    page
+  }) => {
+    await mount(<DivergedTokenInlay initial="Hi " />)
 
-      const ed = page.getByRole('textbox')
-      await ed.click()
+    const ed = page.getByRole('textbox')
+    await ed.click()
 
-      await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-      await page.evaluate(() => navigator.clipboard.writeText('@alice'))
+    // Move to end
+    for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight')
 
-      for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight')
-      await page.keyboard.press('ControlOrMeta+v')
+    // Write to clipboard and paste using real keyboard shortcut
+    await page.evaluate(() => navigator.clipboard.writeText('@alice'))
+    await page.keyboard.press('ControlOrMeta+v')
 
-      await expect(ed.locator('[data-token-text="@alice"]')).toHaveCount(1, {
-        timeout: 1000
-      })
-      await expect(ed).toHaveText('Hi Alice')
-    }
-  )
+    await expect(ed.locator('[data-token-text="@alice"]')).toHaveCount(1)
+    await expect(ed).toHaveText('Hi Alice')
+  })
 })

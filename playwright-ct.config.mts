@@ -25,11 +25,24 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
+      use: {
+        ...devices['Desktop Chrome'],
+        permissions: ['clipboard-read', 'clipboard-write']
+      }
     },
     {
       name: 'firefox',
-      use: { ...devices['Desktop Firefox'] }
+      use: {
+        ...devices['Desktop Firefox'],
+        launchOptions: {
+          firefoxUserPrefs: {
+            // Enable clipboard testing in Firefox
+            'dom.events.testing.asyncClipboard': true,
+            'dom.events.asyncClipboard.readText': true,
+            'dom.events.asyncClipboard.clipboardItem': true
+          }
+        }
+      }
     },
     {
       name: 'webkit',
