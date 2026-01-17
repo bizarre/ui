@@ -66,6 +66,15 @@ export function useTokenWeaver(
       }
     }
 
+    // Empty state: render zero-width space to maintain consistent caret height
+    if (value.length === 0) {
+      return {
+        weavedChildren: <span key="empty">{'\u200B'}</span>,
+        activeToken: null,
+        activeTokenState: null as TokenState | null
+      }
+    }
+
     // Robust sorting to handle duplicate tokens
     const sortedTokens: { text: string; node: React.ReactElement }[] = []
     const tokenPool = [...tokenRegistry.current]

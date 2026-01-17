@@ -8,6 +8,25 @@ function flush() {
   return new Promise((r) => setTimeout(r, 0))
 }
 
+// Empty state rendering
+describe('Inlay empty state', () => {
+  it('renders zero-width space for consistent caret height', async () => {
+    const { getByTestId } = render(
+      <Inlay.Root defaultValue="" data-testid="editor">
+        <span />
+      </Inlay.Root>
+    )
+    const ed = getByTestId('editor') as HTMLElement
+
+    await act(async () => {
+      await flush()
+    })
+
+    // Should contain a zero-width space (U+200B) to maintain caret baseline
+    expect(ed.textContent).toBe('\u200B')
+  })
+})
+
 // Editing basics (Space/Enter) — Backspace covered in its own block below
 describe('Inlay editing (Space/Enter)', () => {
   it('Space and Enter modify value appropriately', async () => {
@@ -322,7 +341,7 @@ describe('Inlay Backspace with grapheme clusters', () => {
       await flush()
     })
 
-    expect(ed.textContent).toBe('')
+    expect(ed.textContent).toBe('\u200B')
     const sel = window.getSelection()!
     const caret = getAbsoluteOffset(ed, sel.focusNode!, sel.focusOffset)
     expect(caret).toBe(0)
@@ -382,7 +401,7 @@ describe('Inlay Backspace with grapheme clusters', () => {
       await flush()
     })
 
-    expect(ed.textContent).toBe('')
+    expect(ed.textContent).toBe('\u200B')
   })
 })
 
@@ -481,7 +500,7 @@ describe('Inlay grapheme advanced cases', () => {
       fireEvent.keyDown(ed, { key: 'Backspace' })
       await flush()
     })
-    expect(ed.textContent).toBe('')
+    expect(ed.textContent).toBe('\u200B')
 
     // Reset and test Delete
     rerender(
@@ -498,7 +517,7 @@ describe('Inlay grapheme advanced cases', () => {
       fireEvent.keyDown(ed, { key: 'Delete' })
       await flush()
     })
-    expect(ed.textContent).toBe('')
+    expect(ed.textContent).toBe('\u200B')
   })
 
   it('setSelection snaps to grapheme boundaries', async () => {
@@ -612,14 +631,14 @@ describe('Inlay multiline prop', () => {
       await flush()
     })
     expect(ed.querySelector('br')).toBeFalsy()
-    expect(ed.textContent).toBe('')
+    expect(ed.textContent).toBe('\u200B')
 
     await act(async () => {
       fireEvent.keyDown(ed, { key: 'Enter', shiftKey: true })
       await flush()
     })
     expect(ed.querySelector('br')).toBeFalsy()
-    expect(ed.textContent).toBe('')
+    expect(ed.textContent).toBe('\u200B')
   })
 
   it('multiline=false does not render trailing <br> even if value ends with \n', async () => {
