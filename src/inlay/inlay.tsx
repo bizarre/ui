@@ -24,6 +24,7 @@ import { useComposition } from './hooks/use-composition'
 import { useKeyHandlers } from './hooks/use-key-handlers'
 import { usePlaceholderSync } from './hooks/use-placeholder-sync'
 import { useSelectionSnap } from './hooks/use-selection-snap'
+import { useClipboard } from './hooks/use-clipboard'
 
 export const COMPONENT_NAME = 'Inlay'
 export const TEXT_COMPONENT_NAME = 'Inlay.Text'
@@ -293,6 +294,13 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
     lastShiftRef,
     isComposingRef
   })
+  const { onCopy, onCut, onPaste } = useClipboard({
+    editorRef,
+    getValue: () => value,
+    setValue,
+    pushUndoSnapshot,
+    isComposingRef
+  })
   useImperativeHandle(forwardedRef, () => ({
     root: editorRef.current,
     setSelection: (start: number, end?: number) => {
@@ -337,6 +345,9 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
                 onCompositionStart={onCompositionStart}
                 onCompositionUpdate={onCompositionUpdate}
                 onCompositionEnd={onCompositionEnd}
+                onCopy={onCopy}
+                onCut={onCut}
+                onPaste={onPaste}
                 suppressContentEditableWarning
                 style={{
                   whiteSpace: 'pre-wrap',

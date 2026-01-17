@@ -1,32 +1,61 @@
+const isTokenElement = (el: Element): boolean =>
+  el.hasAttribute('data-token-text')
+
+const getTokenRawLength = (el: Element): number =>
+  (el.getAttribute('data-token-text') || '').length
+
+const getRenderedTextLength = (el: Element): number => {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null)
+  let total = 0
+  let n: Node | null
+  while ((n = walker.nextNode())) total += (n.textContent || '').length
+  return total
+}
+
+const findFirstTextNode = (el: Element): ChildNode | null => {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null)
+  return walker.nextNode() as ChildNode | null
+}
+
+const findLastTextNode = (el: Element): ChildNode | null => {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null)
+  let last: Node | null = null
+  let n: Node | null
+  while ((n = walker.nextNode())) last = n
+  return last as ChildNode | null
+}
+
+export function getClosestTokenEl(node: Node | null): HTMLElement | null {
+  let curr: Node | null = node
+  while (curr) {
+    if (curr.nodeType === Node.ELEMENT_NODE) {
+      const el = curr as HTMLElement
+      if (el.hasAttribute('data-token-text')) return el
+    }
+    curr = curr.parentNode
+  }
+  return null
+}
+
+export function getTokenRawRange(
+  root: HTMLElement,
+  tokenEl: HTMLElement
+): { start: number; end: number } | null {
+  const rawText = tokenEl.getAttribute('data-token-text')
+  if (!rawText) return null
+
+  const walker = document.createTreeWalker(tokenEl, NodeFilter.SHOW_TEXT, null)
+  const firstText = walker.nextNode()
+  if (!firstText) return null
+
+  const start = getAbsoluteOffset(root, firstText, 0)
+  return { start, end: start + rawText.length }
+}
+
 export const getTextNodeAtOffset = (
   root: HTMLElement,
   offset: number
 ): [ChildNode | null, number] => {
-  // Helper predicates and utilities
-  const isTokenElement = (el: Element): boolean =>
-    el.hasAttribute('data-token-text')
-  const getTokenRawLength = (el: Element): number =>
-    (el.getAttribute('data-token-text') || '').length
-
-  const findFirstTextNode = (el: Element): ChildNode | null => {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null)
-    return walker.nextNode() as ChildNode | null
-  }
-  const findLastTextNode = (el: Element): ChildNode | null => {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null)
-    let last: Node | null = null
-    let n: Node | null
-    while ((n = walker.nextNode())) last = n
-    return last as ChildNode | null
-  }
-  const getRenderedTextLength = (el: Element): number => {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null)
-    let total = 0
-    let n: Node | null
-    while ((n = walker.nextNode())) total += (n.textContent || '').length
-    return total
-  }
-
   const traverse = (
     container: Node,
     remaining: { value: number }
@@ -45,7 +74,6 @@ export const getTextNodeAtOffset = (
 
           if (isDiverged) {
             if (remaining.value <= rawLen) {
-              // Inside this token's raw span: snap to nearest token edge visually
               const first = findFirstTextNode(el)
               const last = findLastTextNode(el)
               if (!first && !last) return null
@@ -64,13 +92,11 @@ export const getTextNodeAtOffset = (
             continue
           }
 
-          // Not diverged: traverse inside normally (rendered == raw)
           const found = traverse(el, remaining)
           if (found) return found
           continue
         }
 
-        // Non-token element: traverse into it
         const found = traverse(el, remaining)
         if (found) return found
         continue
@@ -88,16 +114,16 @@ export const getTextNodeAtOffset = (
     return null
   }
 
-  // Execute traversal
   const result = traverse(root, { value: Math.max(0, offset) })
   if (result) return result
 
-  // Fallbacks: try to place at the end of the last token or last text
+  // Fallback: place at end of last text node
   const allTokenTextNodes = Array.from(
     root.querySelectorAll('[data-token-text]')
   )
     .map((el) => findLastTextNode(el))
     .filter(Boolean) as ChildNode[]
+
   if (allTokenTextNodes.length > 0) {
     const lastNode = allTokenTextNodes[allTokenTextNodes.length - 1]
     return [lastNode, (lastNode.textContent || '').length]
@@ -116,23 +142,7 @@ export const getAbsoluteOffset = (
   root: HTMLElement,
   node: Node,
   offset: number
-) => {
-  // Helper predicates and utilities
-  const isTokenElement = (el: Element): boolean =>
-    el.hasAttribute('data-token-text')
-  const getTokenRawLength = (el: Element): number =>
-    (el.getAttribute('data-token-text') || '').length
-
-  const getRenderedTextLength = (el: Element): number => {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null)
-    let total = 0
-    let n: Node | null
-    while ((n = walker.nextNode())) {
-      total += (n.textContent || '').length
-    }
-    return total
-  }
-
+): number => {
   const getOffsetWithinElement = (
     el: Element,
     target: Node,
@@ -147,6 +157,34 @@ export const getAbsoluteOffset = (
         break
       }
       total += (n.textContent || '').length
+    }
+    return total
+  }
+
+  // Handle element node containers (e.g. Firefox Ctrl+a sets selection on element, not text node)
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const el = node as Element
+    const children = el.childNodes
+
+    let total = 0
+    const measure = (n: Node): number => {
+      if (n.nodeType === Node.TEXT_NODE) {
+        return (n.textContent || '').length
+      }
+      if (n.nodeType === Node.ELEMENT_NODE) {
+        const e = n as Element
+        if (isTokenElement(e)) return getTokenRawLength(e)
+        let sum = 0
+        for (let i = 0; i < e.childNodes.length; i++) {
+          sum += measure(e.childNodes[i])
+        }
+        return sum
+      }
+      return 0
+    }
+
+    for (let i = 0; i < offset && i < children.length; i++) {
+      total += measure(children[i])
     }
     return total
   }
@@ -174,24 +212,20 @@ export const getAbsoluteOffset = (
             continue
           }
 
-          // Not diverged: allow interior positions to map naturally
           if (el.contains(node)) {
             const inner = traverse(el, acc)
             if (inner != null) return inner
           } else {
-            // Add rendered length (equals raw length here)
             acc.value += renderedLen
           }
           continue
         }
 
-        // Non-token element
         if (el.contains(node)) {
           const inner = traverse(el, acc)
           if (inner != null) return inner
         } else {
-          // Sum subtree rendered length for non-token elements
-          const measure = (e: Element): number => {
+          const measureSubtree = (e: Element): number => {
             let total = 0
             const cn = e.childNodes
             for (let j = 0; j < cn.length; j++) {
@@ -205,13 +239,13 @@ export const getAbsoluteOffset = (
                   const rr = getRenderedTextLength(ce)
                   total += rr === rl ? rr : rl
                 } else {
-                  total += measure(ce)
+                  total += measureSubtree(ce)
                 }
               }
             }
             return total
           }
-          acc.value += measure(el)
+          acc.value += measureSubtree(el)
         }
         continue
       }
@@ -230,31 +264,26 @@ export const getAbsoluteOffset = (
   const result = traverse(root, { value: 0 })
   if (result != null) return result
 
-  // Fallback: compute total length blending raw/rendered appropriately
-  const totalLength = (() => {
-    let total = 0
-    const stack: Node[] = [root]
-    const isTok = (el: Element) => el.hasAttribute('data-token-text')
-    while (stack.length) {
-      const n = stack.pop()!
-      if (n.nodeType === Node.ELEMENT_NODE) {
-        const el = n as Element
-        if (isTok(el)) {
-          const rl = (el.getAttribute('data-token-text') || '').length
-          const rr = getRenderedTextLength(el)
-          total += rr === rl ? rr : rl
-          continue
-        }
-        const cn = el.childNodes
-        for (let i = cn.length - 1; i >= 0; i--) stack.push(cn[i])
-      } else if (n.nodeType === Node.TEXT_NODE) {
-        total += (n.textContent || '').length
+  // Fallback: total length
+  let total = 0
+  const stack: Node[] = [root]
+  while (stack.length) {
+    const n = stack.pop()!
+    if (n.nodeType === Node.ELEMENT_NODE) {
+      const el = n as Element
+      if (isTokenElement(el)) {
+        const rl = getTokenRawLength(el)
+        const rr = getRenderedTextLength(el)
+        total += rr === rl ? rr : rl
+        continue
       }
+      const cn = el.childNodes
+      for (let i = cn.length - 1; i >= 0; i--) stack.push(cn[i])
+    } else if (n.nodeType === Node.TEXT_NODE) {
+      total += (n.textContent || '').length
     }
-    return total
-  })()
-
-  return totalLength
+  }
+  return total
 }
 
 export const setDomSelection = (
@@ -281,17 +310,10 @@ export const setDomSelection = (
 
 export const serializeRawFromDom = (root: HTMLElement): string => {
   const clone = root.cloneNode(true) as HTMLElement
-  const getRenderedLen = (el: Element): number => {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null)
-    let total = 0
-    let n: Node | null
-    while ((n = walker.nextNode())) total += (n.textContent || '').length
-    return total
-  }
   const tokenEls = clone.querySelectorAll('[data-token-text]')
   tokenEls.forEach((el) => {
     const raw = el.getAttribute('data-token-text') || ''
-    const renderedLen = getRenderedLen(el)
+    const renderedLen = getRenderedTextLength(el)
     if (renderedLen !== raw.length) {
       ;(el as HTMLElement).textContent = raw
     }
