@@ -24,6 +24,11 @@ import { useComposition } from './hooks/use-composition'
 import { useKeyHandlers } from './hooks/use-key-handlers'
 import { usePlaceholderSync } from './hooks/use-placeholder-sync'
 import { useSelectionSnap } from './hooks/use-selection-snap'
+import {
+  PortalList,
+  PortalItem,
+  type PortalKeyboardHandler
+} from './portal-list'
 import { useClipboard } from './hooks/use-clipboard'
 
 export const COMPONENT_NAME = 'Inlay'
@@ -36,6 +41,15 @@ const AncestorContext = createContext<React.ReactElement | null>(null)
 const PopoverControlContext = createContext<{
   setOpen: (open: boolean) => void
 } | null>(null)
+
+// Context for portal keyboard navigation
+type PortalKeyboardContextValue = {
+  setHandler: (handler: PortalKeyboardHandler | null) => void
+}
+const PortalKeyboardContext = createContext<PortalKeyboardContextValue | null>(
+  null
+)
+export { PortalKeyboardContext }
 
 function annotateWithAncestor(
   node: React.ReactNode,
@@ -147,6 +161,17 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
   )
 
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
+
+  // Portal keyboard handler - allows Portal.List to intercept keyboard events
+  const portalKeyboardHandlerRef = useRef<PortalKeyboardHandler | null>(null)
+  const portalKeyboardContext = useMemo(
+    () => ({
+      setHandler: (handler: PortalKeyboardHandler | null) => {
+        portalKeyboardHandlerRef.current = handler
+      }
+    }),
+    []
+  )
   const lastAnchorRectRef = useRef<DOMRect>(new DOMRect(0, 0, 0, 0))
   const virtualAnchorRef = useRef({
     getBoundingClientRect: () => lastAnchorRectRef.current
@@ -301,6 +326,22 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
     pushUndoSnapshot,
     isComposingRef
   })
+  // Wrap onKeyDown to route through portal keyboard handler first
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // If portal has a keyboard handler registered and it handles the event, stop
+      if (
+        isPopoverOpen &&
+        portalKeyboardHandlerRef.current &&
+        portalKeyboardHandlerRef.current(event)
+      ) {
+        return
+      }
+      // Otherwise, use the default key handler
+      onKeyDown(event)
+    },
+    [isPopoverOpen, onKeyDown]
+  )
   useImperativeHandle(forwardedRef, () => ({
     root: editorRef.current,
     setSelection: (start: number, end?: number) => {
@@ -342,7 +383,7 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
                 aria-multiline={multiline}
                 onSelect={onSelect}
                 onBeforeInput={onBeforeInput}
-                onKeyDown={onKeyDown}
+                onKeyDown={handleKeyDown}
                 onCompositionStart={onCompositionStart}
                 onCompositionUpdate={onCompositionUpdate}
                 onCompositionEnd={onCompositionEnd}
@@ -373,7 +414,9 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
                 </div>
               )}
             </div>
-            {popoverPortal}
+            <PortalKeyboardContext.Provider value={portalKeyboardContext}>
+              {popoverPortal}
+            </PortalKeyboardContext.Provider>
           </PublicInlayProvider>
         </InternalInlayProvider>
       </Popover.Root>
@@ -386,6 +429,8 @@ type PortalRenderProps = (context: PublicInlayContextValue) => React.ReactNode
 type PortalProps = ScopedProps<
   Omit<Popover.PopoverContentProps, 'children'> & {
     children: PortalRenderProps
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: `data-${string}`]: any
   }
 >
 
@@ -393,6 +438,7 @@ const Portal = (props: PortalProps) => {
   const { __scope, children, ...contentProps } = props
   const context = usePublicInlayContext(COMPONENT_NAME, __scope)
   const popoverControl = useContext(PopoverControlContext)
+  const keyboardContext = useContext(PortalKeyboardContext)
 
   const content = children(context)
 
@@ -409,11 +455,19 @@ const Portal = (props: PortalProps) => {
       align="center"
       {...contentProps}
     >
-      {content}
+      <PortalKeyboardContext.Provider value={keyboardContext}>
+        {content}
+      </PortalKeyboardContext.Provider>
     </Popover.Content>
   )
 }
 Portal.displayName = 'Inlay.Portal'
+
+// Attach List and Item to Portal for compound component API
+const PortalWithList = Object.assign(Portal, {
+  List: PortalList,
+  Item: PortalItem
+})
 
 type TokenProps = ScopedProps<{
   value: string
@@ -444,4 +498,4 @@ const Token = React.forwardRef<HTMLSpanElement, TokenProps>((props, ref) => {
 
 Token.displayName = TEXT_COMPONENT_NAME
 
-export { Inlay as Root, Token, Portal }
+export { Inlay as Root, Token, PortalWithList as Portal }

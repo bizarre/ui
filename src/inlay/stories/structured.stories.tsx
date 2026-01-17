@@ -1,6 +1,7 @@
 import type { Meta } from '@storybook/react'
 import { StructuredInlay } from '../structured/structured-inlay'
 import { mentions } from '../structured/plugins/mentions'
+import { Portal } from '../inlay'
 import React from 'react'
 
 const meta: Meta<typeof StructuredInlay> = {
@@ -16,7 +17,7 @@ const MOCK_USERS = [
   { id: 'alexanderthegreat', name: 'Alexander The Great' }
 ]
 
-// This component now ONLY handles rendering the autocomplete list.
+// This component uses Portal.List/Item for keyboard navigation
 const MentionAutocomplete = ({
   query,
   onSelect
@@ -39,28 +40,37 @@ const MentionAutocomplete = ({
     return () => clearTimeout(timeout)
   }, [query])
 
-  return (
-    <div
-      className="bg-white rounded-xl shadow-lg p-2 border text-sm w-48"
-      onMouseDown={(e) => e.preventDefault()}
-    >
-      {isLoading ? (
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl shadow-lg p-2 border text-sm w-48">
         <div className="p-2 text-gray-500">Loading...</div>
-      ) : results.length > 0 ? (
-        results.map((user) => (
-          <div
-            key={user.id}
-            className="p-2 hover:bg-gray-100 rounded-md cursor-pointer"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => onSelect(user)}
-          >
-            {user.name}
-          </div>
-        ))
-      ) : (
+      </div>
+    )
+  }
+
+  if (results.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-lg p-2 border text-sm w-48">
         <div className="p-2 text-gray-500">No results</div>
-      )}
-    </div>
+      </div>
+    )
+  }
+
+  return (
+    <Portal.List
+      onSelect={(user: (typeof MOCK_USERS)[number]) => onSelect(user)}
+      className="bg-white rounded-xl shadow-lg p-2 border text-sm w-48"
+    >
+      {results.map((user) => (
+        <Portal.Item
+          key={user.id}
+          value={user}
+          className="p-2 rounded-md cursor-pointer data-[active]:bg-blue-100"
+        >
+          {user.name}
+        </Portal.Item>
+      ))}
+    </Portal.List>
   )
 }
 
