@@ -10,7 +10,8 @@ import {
   ChevronDown,
   ArrowLeftRight,
   ExternalLink,
-  CornerDownRight
+  CornerDownRight,
+  TextCursorInput
 } from 'lucide-react'
 import { ClientOnly } from 'vike-react/ClientOnly'
 import packageJson from '../../../package.json'
@@ -128,7 +129,185 @@ export default function Page() {
 
           {/* Component Accordion */}
           <div className="space-y-6">
-            {/* TimeSlice Component Accordion */}
+            <Collapsible.Root className="w-full" defaultOpen>
+              <Collapsible.Trigger className="w-full group">
+                <div className="flex items-center justify-between py-3 px-4 bg-black/40 border border-zinc-800/80 rounded-lg hover:border-zinc-700/80 transition-colors">
+                  <div className="flex items-center gap-3 sm:gap-5">
+                    <div className="p-2 sm:p-2.5 rounded-lg bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/20 shadow-sm">
+                      <TextCursorInput className="h-5 w-5 sm:h-5 sm:w-5 text-emerald-400" />
+                    </div>
+                    <div className="flex flex-col items-start text-left flex-1">
+                      <h3 className="text-lg sm:text-xl font-semibold text-white group-hover:text-white/90 transition-colors">
+                        Inlay
+                      </h3>
+                      <p className="text-zinc-400 text-sm sm:text-base leading-relaxed group-hover:text-zinc-300 transition-colors">
+                        A composable input for structured text
+                      </p>
+                    </div>
+                  </div>
+                  <div className="h-8 w-8 rounded-full bg-zinc-900/70 border border-zinc-800 flex items-center justify-center group-data-[state=open]:rotate-180 transition-transform duration-300">
+                    <ChevronDown className="h-4 w-4 text-zinc-400 group-hover:text-zinc-300 transition-colors" />
+                  </div>
+                </div>
+              </Collapsible.Trigger>
+              <Collapsible.Content className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+                <div className="pt-6 pl-5 pr-3">
+                  <div className="relative">
+                    {/* Subtle component divider */}
+                    <div className="absolute -left-5 top-0 w-px h-full bg-gradient-to-b from-emerald-500/30 via-cyan-500/20 to-transparent"></div>
+
+                    {/* Compact Features and Use Cases - Above Example */}
+                    <div className="mb-8 sm:mb-10 bg-black/20 rounded-lg border border-zinc-800/50 p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Features Section */}
+                        <div>
+                          <div className="flex items-center mb-3">
+                            <div className="h-6 w-6 rounded-full bg-gradient-to-br from-emerald-500/20 to-green-500/10 flex items-center justify-center mr-2 border border-emerald-500/20">
+                              <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                            </div>
+                            <h4 className="text-sm font-medium text-white">
+                              Features
+                            </h4>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <div className="flex items-center rounded-full bg-zinc-900/70 px-2.5 py-1 border border-zinc-800 hover:border-emerald-500/30 transition-colors">
+                              <span className="text-zinc-300 text-xs">
+                                Component-driven tokens
+                              </span>
+                            </div>
+                            <div className="flex items-center rounded-full bg-zinc-900/70 px-2.5 py-1 border border-zinc-800 hover:border-emerald-500/30 transition-colors">
+                              <span className="text-zinc-300 text-xs">
+                                Custom parsing
+                              </span>
+                            </div>
+                            <div className="flex items-center rounded-full bg-zinc-900/70 px-2.5 py-1 border border-zinc-800 hover:border-emerald-500/30 transition-colors">
+                              <span className="text-zinc-300 text-xs">
+                                Native-like UX
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Perfect For Section */}
+                        <div>
+                          <div className="flex items-center mb-3">
+                            <div className="h-6 w-6 rounded-full bg-gradient-to-br from-blue-500/20 to-violet-500/10 flex items-center justify-center mr-2 border border-blue-500/20">
+                              <Calendar className="h-3.5 w-3.5 text-blue-400" />
+                            </div>
+                            <h4 className="text-sm font-medium text-white">
+                              Perfect For
+                            </h4>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <div className="flex items-center rounded-full bg-zinc-900/70 px-2.5 py-1 border border-zinc-800 hover:border-blue-500/30 transition-colors">
+                              <span className="text-zinc-300 text-xs">
+                                Mentions
+                              </span>
+                            </div>
+                            <div className="flex items-center rounded-full bg-zinc-900/70 px-2.5 py-1 border border-zinc-800 hover:border-blue-500/30 transition-colors">
+                              <span className="text-zinc-300 text-xs">
+                                Search filters
+                              </span>
+                            </div>
+                            <div className="flex items-center rounded-full bg-zinc-900/70 px-2.5 py-1 border border-zinc-800 hover:border-blue-500/30 transition-colors">
+                              <span className="text-zinc-300 text-xs">
+                                AI inputs
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Clean, flat demo card */}
+                    <div className="w-full mb-10 sm:mb-12">
+                      <div className="bg-black/30 border border-zinc-800/80 rounded-lg overflow-visible">
+                        {/* Top bar */}
+                        <div className="border-b border-zinc-800/50 px-3 sm:px-5 py-2 sm:py-3 flex justify-between items-center bg-black/20">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-emerald-500/70"></div>
+                            <span className="text-xs font-medium text-zinc-400">
+                              DEMO
+                            </span>
+                          </div>
+
+                          <ClientOnly
+                            load={() =>
+                              import(
+                                '../../components/component-showcase-dialog'
+                              )
+                            }
+                            fallback={
+                              <div className="animate-pulse h-8 w-24 bg-zinc-900/50 rounded-md"></div>
+                            }
+                          >
+                            {(ComponentShowcaseDialog) => (
+                              <ClientOnly
+                                load={() =>
+                                  import('../../components/time-slice-example')
+                                }
+                                fallback={<div />}
+                              >
+                                {(ChronoExample) => (
+                                  <ComponentShowcaseDialog
+                                    title="Chrono Component"
+                                    description="Chrono is a flexible time range picker with natural language support, relative time handling, and keyboard navigation."
+                                    demoComponent={ChronoExample}
+                                    codeTabs={[
+                                      {
+                                        label: 'Basic',
+                                        value: 'basic',
+                                        code: timeSliceBasicExample,
+                                        language: 'tsx'
+                                      },
+                                      {
+                                        label: 'Demo',
+                                        value: 'implementation',
+                                        code: timeSliceImplementationExample,
+                                        language: 'tsx'
+                                      }
+                                    ]}
+                                    docsLink="/storybook/?path=/story/chrono"
+                                    trigger={
+                                      <button className="text-xs flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800/80 px-2.5 py-1.5 rounded text-zinc-400 hover:text-zinc-300 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/30">
+                                        <Code className="h-3.5 w-3.5" />
+                                        <span>View code</span>
+                                      </button>
+                                    }
+                                  />
+                                )}
+                              </ClientOnly>
+                            )}
+                          </ClientOnly>
+                        </div>
+
+                        {/* Demo container with ample space for dropdown visibility */}
+                        <div className="px-3 sm:px-4 py-4 sm:py-6 flex flex-col items-center justify-center">
+                          <div className="w-full max-w-md relative">
+                            <ClientOnly
+                              load={() =>
+                                import('../../components/time-slice-example')
+                              }
+                              fallback={
+                                <div className="animate-pulse flex items-center justify-center h-12 w-full">
+                                  <div className="h-2 bg-zinc-700 rounded w-32"></div>
+                                </div>
+                              }
+                            >
+                              {(ChronoExample) => <ChronoExample />}
+                            </ClientOnly>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Collapsible.Content>
+            </Collapsible.Root>
+
+            {/* Chrono Component Accordion */}
             <Collapsible.Root defaultOpen className="w-full">
               <Collapsible.Trigger className="w-full group">
                 <div className="flex items-center justify-between py-3 px-4 bg-black/40 border border-zinc-800/80 rounded-lg hover:border-zinc-700/80 transition-colors">
@@ -138,10 +317,10 @@ export default function Page() {
                     </div>
                     <div className="flex flex-col items-start text-left flex-1">
                       <h3 className="text-lg sm:text-xl font-semibold text-white group-hover:text-white/90 transition-colors">
-                        TimeSlice
+                        Chrono
                       </h3>
                       <p className="text-zinc-400 text-sm sm:text-base leading-relaxed group-hover:text-zinc-300 transition-colors">
-                        A flexible time range picker with built-in intelligence
+                        A time range picker with built-in intelligence
                       </p>
                     </div>
                   </div>
@@ -261,11 +440,11 @@ export default function Page() {
                                 }
                                 fallback={<div />}
                               >
-                                {(TimeSliceExample) => (
+                                {(ChronoExample) => (
                                   <ComponentShowcaseDialog
-                                    title="TimeSlice Component"
-                                    description="TimeSlice is a flexible time range picker with natural language support, relative time handling, and keyboard navigation."
-                                    demoComponent={TimeSliceExample}
+                                    title="Chrono Component"
+                                    description="Chrono is a flexible time range picker with natural language support, relative time handling, and keyboard navigation."
+                                    demoComponent={ChronoExample}
                                     codeTabs={[
                                       {
                                         label: 'Basic',
@@ -274,13 +453,13 @@ export default function Page() {
                                         language: 'tsx'
                                       },
                                       {
-                                        label: 'Implementation',
+                                        label: 'Demo',
                                         value: 'implementation',
                                         code: timeSliceImplementationExample,
                                         language: 'tsx'
                                       }
                                     ]}
-                                    docsLink="/storybook/?path=/story/timeslice"
+                                    docsLink="/storybook/?path=/story/chrono"
                                     trigger={
                                       <button className="text-xs flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800/80 px-2.5 py-1.5 rounded text-zinc-400 hover:text-zinc-300 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/30">
                                         <Code className="h-3.5 w-3.5" />
@@ -307,7 +486,7 @@ export default function Page() {
                                 </div>
                               }
                             >
-                              {(TimeSliceExample) => <TimeSliceExample />}
+                              {(ChronoExample) => <ChronoExample />}
                             </ClientOnly>
                           </div>
                         </div>
@@ -489,43 +668,6 @@ export default function Page() {
                 </div>
               </Collapsible.Content>
             </Collapsible.Root>
-
-            {/* <Collapsible.Root className="w-full">
-              <Collapsible.Trigger className="w-full group">
-                <div className="flex items-center justify-between py-3 px-4 bg-black/40 border border-zinc-800/80 rounded-lg hover:border-zinc-700/80 transition-colors">
-                  <div className="flex items-center gap-3 sm:gap-5">
-                    <div className="p-2 sm:p-2.5 rounded-lg bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/20 shadow-sm">
-                      <MessageSquare className="h-5 w-5 sm:h-5 sm:w-5 text-emerald-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg sm:text-xl font-semibold text-white group-hover:text-white/90 transition-colors">
-                        Future Component
-                      </h3>
-                      <p className="text-zinc-400 text-sm sm:text-base leading-relaxed group-hover:text-zinc-300 transition-colors">
-                        Description of the future component goes here
-                      </p>
-                    </div>
-                  </div>
-                  <div className="h-8 w-8 rounded-full bg-zinc-900/70 border border-zinc-800 flex items-center justify-center group-data-[state=open]:rotate-180 transition-transform duration-300">
-                    <ChevronDown className="h-4 w-4 text-zinc-400 group-hover:text-zinc-300 transition-colors" />
-                  </div>
-                </div>
-              </Collapsible.Trigger>
-              <Collapsible.Content className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-                <div className="pt-6 pl-5 pr-3">
-                  <div className="py-12 px-8 bg-black/20 rounded-lg border border-zinc-800/50 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
-                        <Sparkles className="h-5 w-5 text-emerald-400" />
-                      </div>
-                      <p className="text-zinc-400 text-sm">
-                        More components coming soon
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Collapsible.Content>
-            </Collapsible.Root> */}
           </div>
         </section>
 

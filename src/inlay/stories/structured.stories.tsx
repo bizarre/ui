@@ -2,7 +2,6 @@ import type { Meta } from '@storybook/react'
 import { StructuredInlay } from '../structured/structured-inlay'
 import { mentions } from '../structured/plugins/mentions'
 import React from 'react'
-import { Root as Inlay, Token } from '../'
 
 const meta: Meta<typeof StructuredInlay> = {
   title: 'inlay',
@@ -98,16 +97,6 @@ const MentionToken = ({
     )
   }
   return <span className="text-blue-500">{token.mention}</span>
-}
-
-export const Test = () => {
-  return (
-    <Inlay defaultValue={'A@xB'} data-testid="root">
-      <Token value="@x">
-        <span>@x</span>
-      </Token>
-    </Inlay>
-  )
 }
 
 export const Structured = () => {
