@@ -1,6 +1,5 @@
 import React from 'react'
-import { StructuredInlay } from '../../structured/structured-inlay'
-import { Portal } from '../../inlay'
+import { Inlay } from '../../index'
 import { createRegexMatcher } from '../../internal/string-utils'
 import type { Plugin } from '../../structured/plugins/plugin'
 
@@ -18,8 +17,8 @@ const mentionMatcher = createRegexMatcher<TokenData, 'mention'>('mention', {
 })
 
 /**
- * A fixture for testing Portal.List keyboard navigation.
- * Uses StructuredInlay with a mention-style plugin.
+ * A fixture for testing Inlay.Portal.List keyboard navigation.
+ * Uses Inlay.StructuredInlay with a mention-style plugin.
  */
 export function PortalNavigationInlay({
   initial = '',
@@ -47,7 +46,7 @@ export function PortalNavigationInlay({
       portal: ({ replace }) => {
         // Always show portal for testing
         return (
-          <Portal.List
+          <Inlay.Portal.List
             onSelect={(item: (typeof ITEMS)[number]) => {
               replace(`@${item.id} `)
               setSelectedItem(item.label)
@@ -58,16 +57,16 @@ export function PortalNavigationInlay({
             className="portal-list"
           >
             {ITEMS.map((item) => (
-              <Portal.Item
+              <Inlay.Portal.Item
                 key={item.id}
                 value={item}
                 data-testid={`item-${item.id}`}
                 className="portal-item"
               >
                 {item.label}
-              </Portal.Item>
+              </Inlay.Portal.Item>
             ))}
-          </Portal.List>
+          </Inlay.Portal.List>
         )
       },
       onInsert: () => {},
@@ -78,7 +77,7 @@ export function PortalNavigationInlay({
 
   return (
     <div>
-      <StructuredInlay
+      <Inlay.StructuredInlay
         value={rawValue}
         onChange={setRawValue}
         plugins={[plugin]}

@@ -1,17 +1,17 @@
 import React from 'react'
-import { Root as Inlay, Token } from '../..'
+import { Inlay } from '../..'
 
 export function ControlledTokenInlay({ initial }: { initial: string }) {
   const [value, setValue] = React.useState(initial)
   return (
-    <Inlay value={value} onChange={setValue} data-testid="root">
+    <Inlay.Root value={value} onChange={setValue} data-testid="root">
       {value.includes('@x') ? (
-        <Token value="@x">
+        <Inlay.Token value="@x">
           <span>@x</span>
-        </Token>
+        </Inlay.Token>
       ) : (
         <span />
       )}
-    </Inlay>
+    </Inlay.Root>
   )
 }

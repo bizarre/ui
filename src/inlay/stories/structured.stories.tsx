@@ -1,12 +1,11 @@
 import type { Meta } from '@storybook/react'
-import { StructuredInlay } from '../structured/structured-inlay'
+import { Inlay } from '../index'
 import { mentions } from '../structured/plugins/mentions'
-import { Portal } from '../inlay'
 import React from 'react'
 
-const meta: Meta<typeof StructuredInlay> = {
+const meta: Meta<typeof Inlay.StructuredInlay> = {
   title: 'inlay',
-  component: StructuredInlay
+  component: Inlay.StructuredInlay
 }
 
 export default meta
@@ -17,7 +16,7 @@ const MOCK_USERS = [
   { id: 'alexanderthegreat', name: 'Alexander The Great' }
 ]
 
-// This component uses Portal.List/Item for keyboard navigation
+// This component uses Inlay.Portal.List/Item for keyboard navigation
 const MentionAutocomplete = ({
   query,
   onSelect
@@ -57,20 +56,20 @@ const MentionAutocomplete = ({
   }
 
   return (
-    <Portal.List
+    <Inlay.Portal.List
       onSelect={(user: (typeof MOCK_USERS)[number]) => onSelect(user)}
       className="bg-white rounded-xl shadow-lg p-2 border text-sm w-48"
     >
       {results.map((user) => (
-        <Portal.Item
+        <Inlay.Portal.Item
           key={user.id}
           value={user}
           className="p-2 rounded-md cursor-pointer data-[active]:bg-blue-100"
         >
           {user.name}
-        </Portal.Item>
+        </Inlay.Portal.Item>
       ))}
-    </Portal.List>
+    </Inlay.Portal.List>
   )
 }
 
@@ -86,7 +85,7 @@ const MentionToken = ({
   React.useEffect(() => {
     // If the token has a canonical ID but not a display name, fetch it.
     if (token.mention.startsWith('@') && !token.name) {
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         const id = token.mention.slice(1)
         const user = MOCK_USERS.find((u) => u.id === id)
         if (user) {
@@ -96,8 +95,10 @@ const MentionToken = ({
           })
         }
       }, 500)
+      // Clean up timeout if effect re-runs or component unmounts
+      return () => clearTimeout(timeout)
     }
-  }, [token, update])
+  }, [token.mention, token.name, update])
 
   if (token.name) {
     return (
@@ -113,7 +114,7 @@ export const Structured = () => {
   return (
     <div className="bg-gray-100 p-8 flex justify-center min-h-screen items-start">
       <div className="w-full max-w-2xl bg-white rounded-xl shadow-md p-4">
-        <StructuredInlay
+        <Inlay.StructuredInlay
           plugins={[
             mentions({
               render: ({ token, update }) => (

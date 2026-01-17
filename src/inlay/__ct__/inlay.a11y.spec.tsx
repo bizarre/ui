@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/experimental-ct-react'
 import AxeBuilder from '@axe-core/playwright'
 import { DivergedTokenInlay } from './fixtures/diverged-token-inlay'
-import { Root } from '../../inlay'
+import { Inlay } from '../..'
 
 test.describe('Inlay accessibility', () => {
   test('empty state has no a11y violations', async ({ mount, page }) => {
@@ -31,9 +31,9 @@ test.describe('Inlay accessibility', () => {
 
   test('has default aria-label', async ({ mount, page }) => {
     await mount(
-      <Root defaultValue="">
+      <Inlay.Root defaultValue="">
         <span />
-      </Root>
+      </Inlay.Root>
     )
     const editor = page.getByRole('textbox')
     await expect(editor).toHaveAttribute('aria-label', 'Text input')
@@ -41,9 +41,9 @@ test.describe('Inlay accessibility', () => {
 
   test('aria-label can be overridden', async ({ mount, page }) => {
     await mount(
-      <Root defaultValue="" aria-label="Message composer">
+      <Inlay.Root defaultValue="" aria-label="Message composer">
         <span />
-      </Root>
+      </Inlay.Root>
     )
     const editor = page.getByRole('textbox')
     await expect(editor).toHaveAttribute('aria-label', 'Message composer')

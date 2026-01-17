@@ -44,10 +44,16 @@ export const StructuredInlay = <
   const idCounterRef = React.useRef(0)
   const nextId = React.useCallback(() => `tok_${++idCounterRef.current}`, [])
 
+  // Keep plugins in a ref to avoid re-running the effect when the array reference changes
+  // (common when plugins are passed inline as an array literal)
+  const pluginsRef = React.useRef(plugins)
+  pluginsRef.current = plugins
+
   // Sync live token metadata with current value; preserve metadata where possible
   React.useEffect(() => {
     const newValue = value ?? ''
-    const matchers = plugins.map((p) => p.matcher) as any
+    const currentPlugins = pluginsRef.current
+    const matchers = currentPlugins.map((p) => p.matcher) as any
     const newMatches = scan(newValue, matchers)
 
     setLiveTokens((currentTokens) => {
@@ -129,7 +135,8 @@ export const StructuredInlay = <
           updatedTokens.push({
             ...nm,
             id: oldMatch.id,
-            data: { ...oldMatch.data }
+            // Reuse the data object reference to maintain stable identity for consumers
+            data: oldMatch.data
           })
         } else {
           updatedTokens.push({ ...nm, id: nextId() })
@@ -138,7 +145,7 @@ export const StructuredInlay = <
 
       return updatedTokens
     })
-  }, [value, plugins, nextId])
+  }, [value, nextId])
 
   const replaceToken = React.useCallback(
     (tokenToReplace: LiveToken, newText: string) => {
@@ -172,65 +179,93 @@ export const StructuredInlay = <
     [setValue]
   )
 
-  const updateToken = React.useCallback(
-    (tokenToUpdate: LiveToken, newData: any) => {
-      // Capture current selection absolute offsets relative to the editor root
-      const rootEl = rootRef.current?.root
-      let capturedSelection: { start: number; end: number } | null = null
-      if (rootEl) {
-        const sel = window.getSelection()
-        if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0)
-          const start = getAbsoluteOffset(
-            rootEl,
-            range.startContainer,
-            range.startOffset
-          )
-          const end = getAbsoluteOffset(
-            rootEl,
-            range.endContainer,
-            range.endOffset
-          )
-          capturedSelection = { start, end }
-        }
-      }
-
-      flushSync(() => {
-        setLiveTokens((currentTokens) =>
-          currentTokens.map((token) => {
-            if (token.id === tokenToUpdate.id) {
-              return {
-                ...token,
-                data: { ...(token.data as any), ...newData }
-              }
-            }
-            return token
-          })
+  // Update a token by ID - stable function that doesn't depend on match object
+  const updateTokenById = React.useCallback((tokenId: string, newData: any) => {
+    // Capture current selection absolute offsets relative to the editor root
+    const rootEl = rootRef.current?.root
+    let capturedSelection: { start: number; end: number } | null = null
+    if (rootEl) {
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0)
+        const start = getAbsoluteOffset(
+          rootEl,
+          range.startContainer,
+          range.startOffset
         )
-      })
+        const end = getAbsoluteOffset(
+          rootEl,
+          range.endContainer,
+          range.endOffset
+        )
+        capturedSelection = { start, end }
+      }
+    }
 
-      if (capturedSelection) {
-        const { start, end } = capturedSelection
-        const rootImmediate = rootRef.current?.root
-        if (rootImmediate && document.activeElement === rootImmediate) {
+    flushSync(() => {
+      setLiveTokens((currentTokens) =>
+        currentTokens.map((token) => {
+          if (token.id === tokenId) {
+            return {
+              ...token,
+              data: { ...(token.data as any), ...newData }
+            }
+          }
+          return token
+        })
+      )
+    })
+
+    if (capturedSelection) {
+      const { start, end } = capturedSelection
+      const rootImmediate = rootRef.current?.root
+      if (rootImmediate && document.activeElement === rootImmediate) {
+        rootRef.current?.setSelection(start, end)
+      }
+      const restore = () => {
+        const root = rootRef.current?.root
+        const isFocused = document.activeElement === root
+        if (root && isFocused) {
           rootRef.current?.setSelection(start, end)
         }
-        const restore = () => {
-          const root = rootRef.current?.root
-          const isFocused = document.activeElement === root
-          if (root && isFocused) {
-            rootRef.current?.setSelection(start, end)
-          }
-        }
-        requestAnimationFrame(restore)
       }
-    },
-    []
+      requestAnimationFrame(restore)
+    }
+  }, [])
+
+  // Cache of stable update functions per token ID
+  const updateFunctionsRef = React.useRef(
+    new Map<string, (newData: any) => void>()
   )
+
+  // Get or create a stable update function for a token ID
+  const getUpdateFunction = React.useCallback(
+    (tokenId: string) => {
+      let fn = updateFunctionsRef.current.get(tokenId)
+      if (!fn) {
+        fn = (newData: any) => updateTokenById(tokenId, newData)
+        updateFunctionsRef.current.set(tokenId, fn)
+      }
+      return fn
+    },
+    [updateTokenById]
+  )
+
+  // Clean up stale update functions when tokens change
+  React.useEffect(() => {
+    const currentIds = new Set(liveTokens.map((t) => t.id))
+    for (const id of updateFunctionsRef.current.keys()) {
+      if (!currentIds.has(id)) {
+        updateFunctionsRef.current.delete(id)
+      }
+    }
+  }, [liveTokens])
 
   const tokenChildren = liveTokens
     .map((match) => {
-      const plugin = plugins.find((p) => p.matcher.name === match.matcher)
+      const plugin = pluginsRef.current.find(
+        (p) => p.matcher.name === match.matcher
+      )
       if (!plugin) return null
 
       return (
@@ -242,7 +277,7 @@ export const StructuredInlay = <
         >
           {plugin.render({
             token: match.data as any,
-            update: (newData: any) => updateToken(match, newData)
+            update: getUpdateFunction(match.id)
           })}
         </Base.Token>
       )
@@ -272,7 +307,7 @@ export const StructuredInlay = <
         {({ activeToken, activeTokenState }) => {
           if (!activeToken || !activeTokenState) return null
 
-          const activePlugin = plugins.find(
+          const activePlugin = pluginsRef.current.find(
             (p) =>
               p.matcher.name ===
               (activeToken.node.props as any)['data-token-matcher']
@@ -291,7 +326,7 @@ export const StructuredInlay = <
             token: activeMatch.data as any,
             state: activeTokenState,
             replace: (newText: string) => replaceToken(activeMatch, newText),
-            update: (newData: any) => updateToken(activeMatch, newData)
+            update: getUpdateFunction(activeMatch.id)
           })
         }}
       </Base.Portal>

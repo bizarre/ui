@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/experimental-ct-react'
-import { Root as Inlay } from '../'
+import { Inlay } from '../'
 
 test('basic typing/backspace', async ({ mount, page }) => {
   await mount(
-    <Inlay defaultValue={'ab'} data-testid="root">
+    <Inlay.Root defaultValue={'ab'} data-testid="root">
       <span />
-    </Inlay>
+    </Inlay.Root>
   )
 
   const root = page.getByTestId('root')

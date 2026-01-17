@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/experimental-ct-react'
-import { Root as Inlay } from '../'
+import { Inlay } from '../'
 
 test.describe('Grapheme handling (CT)', () => {
   test('Backspace deletes an entire emoji grapheme cluster', async ({
@@ -8,9 +8,9 @@ test.describe('Grapheme handling (CT)', () => {
   }) => {
     const cluster = '👍🏼'
     await mount(
-      <Inlay defaultValue={cluster} data-testid="root">
+      <Inlay.Root defaultValue={cluster} data-testid="root">
         <span />
-      </Inlay>
+      </Inlay.Root>
     )
 
     const ed = page.getByRole('textbox')
@@ -31,9 +31,9 @@ test.describe('Grapheme handling (CT)', () => {
     const cluster = '👍🏼'
     const text = `a${cluster}b`
     await mount(
-      <Inlay defaultValue={text} data-testid="root">
+      <Inlay.Root defaultValue={text} data-testid="root">
         <span />
-      </Inlay>
+      </Inlay.Root>
     )
 
     const ed = page.getByRole('textbox')
@@ -55,9 +55,9 @@ test.describe('Grapheme handling (CT)', () => {
   }) => {
     const flag = '🇺🇸'
     await mount(
-      <Inlay defaultValue={`a${flag}b`} data-testid="root">
+      <Inlay.Root defaultValue={`a${flag}b`} data-testid="root">
         <span />
-      </Inlay>
+      </Inlay.Root>
     )
 
     const ed = page.getByRole('textbox')
@@ -78,9 +78,9 @@ test.describe('Grapheme handling (CT)', () => {
   }) => {
     const composed = 'e\u0301'
     await mount(
-      <Inlay defaultValue={composed} data-testid="root">
+      <Inlay.Root defaultValue={composed} data-testid="root">
         <span />
-      </Inlay>
+      </Inlay.Root>
     )
 
     const ed = page.getByRole('textbox')

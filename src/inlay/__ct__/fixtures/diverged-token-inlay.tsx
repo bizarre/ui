@@ -1,5 +1,5 @@
 import React from 'react'
-import { Root as Inlay, Token } from '../..'
+import { Inlay } from '../..'
 
 /**
  * A fixture with a "diverged" token where the visual display
@@ -22,14 +22,14 @@ export function DivergedTokenInlay({
   }
 
   return (
-    <Inlay value={value} onChange={handleChange} data-testid="root">
+    <Inlay.Root value={value} onChange={handleChange} data-testid="root">
       {value.includes('@alice') ? (
-        <Token value="@alice" data-testid="token">
+        <Inlay.Token value="@alice" data-testid="token">
           <span style={{ color: 'blue', fontWeight: 'bold' }}>Alice</span>
-        </Token>
+        </Inlay.Token>
       ) : (
         <span />
       )}
-    </Inlay>
+    </Inlay.Root>
   )
 }
