@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getAbsoluteOffset, setDomSelection } from '../internal/dom-utils'
 import { snapGraphemeEnd, snapGraphemeStart } from '../internal/string-utils'
 
@@ -78,6 +78,33 @@ export function useSelection(
     },
     [editorRef, handleSelectionChange, value]
   )
+
+  // iOS Safari fires selectionchange on document, not the element.
+  // This listener ensures we capture selection changes on mobile Safari.
+  useEffect(() => {
+    const handleDocumentSelectionChange = () => {
+      const root = editorRef.current
+      if (!root) return
+
+      // Only process if our editor is focused or contains the selection
+      const domSelection = window.getSelection()
+      if (!domSelection || !domSelection.rangeCount) return
+
+      const range = domSelection.getRangeAt(0)
+      if (!root.contains(range.startContainer)) return
+
+      // Delegate to our existing handler
+      handleSelectionChange()
+    }
+
+    document.addEventListener('selectionchange', handleDocumentSelectionChange)
+    return () => {
+      document.removeEventListener(
+        'selectionchange',
+        handleDocumentSelectionChange
+      )
+    }
+  }, [editorRef, handleSelectionChange])
 
   return {
     selection,

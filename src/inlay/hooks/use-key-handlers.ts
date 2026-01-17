@@ -102,9 +102,55 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
         return
       }
 
+      // Android GBoard sends insertReplacementText for word predictions/autocomplete
+      // This replaces text in a specific range with new text
+      if (inputType === 'insertReplacementText') {
+        event.preventDefault()
+
+        // Get the target range from the native event
+        const nativeEvent = event.nativeEvent as InputEvent
+        const targetRanges = nativeEvent.getTargetRanges?.()
+        if (!targetRanges || targetRanges.length === 0 || !data) return
+
+        const targetRange = targetRanges[0]
+        const replaceStart = getAbsoluteOffset(
+          editorRef.current,
+          targetRange.startContainer,
+          targetRange.startOffset
+        )
+        const replaceEnd = getAbsoluteOffset(
+          editorRef.current,
+          targetRange.endContainer,
+          targetRange.endOffset
+        )
+
+        cfg.beginEditSession('insert')
+        cfg.setValue((currentValue) => {
+          const len = currentValue.length
+          const safeStart = Math.max(0, Math.min(replaceStart, len))
+          const safeEnd = Math.max(0, Math.min(replaceEnd, len))
+          const before = currentValue.slice(0, safeStart)
+          const after = currentValue.slice(safeEnd)
+          const newValue = before + data + after
+          const newSelection = safeStart + data.length
+          scheduleSelection(() => {
+            const root = editorRef.current
+            if (!root || !root.isConnected) return
+            setDomSelection(root, newSelection)
+          })
+          return newValue
+        })
+        return
+      }
+
+      // Handle various delete input types (including mobile-specific ones)
       if (
         inputType === 'deleteContentBackward' ||
-        inputType === 'deleteContentForward'
+        inputType === 'deleteContentForward' ||
+        inputType === 'deleteWordBackward' ||
+        inputType === 'deleteWordForward' ||
+        inputType === 'deleteSoftLineBackward' ||
+        inputType === 'deleteSoftLineForward'
       ) {
         event.preventDefault()
         const domSelection = window.getSelection()

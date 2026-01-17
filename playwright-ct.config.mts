@@ -47,6 +47,18 @@ export default defineConfig({
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] }
+    },
+    // Mobile device projects for touch/mobile testing
+    {
+      name: 'mobile-chrome',
+      use: {
+        ...devices['Pixel 5'],
+        permissions: ['clipboard-read', 'clipboard-write']
+      }
+    },
+    {
+      name: 'mobile-safari',
+      use: { ...devices['iPhone 14'] }
     }
   ]
 })

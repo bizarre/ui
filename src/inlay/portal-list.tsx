@@ -202,9 +202,20 @@ function PortalListInner<T>(
         ref={ref}
         role="listbox"
         {...divProps}
+        style={{
+          // Prevent double-tap zoom on mobile
+          touchAction: 'manipulation',
+          ...divProps.style
+        }}
         onMouseDown={(e) => {
+          // Prevent focus loss from editor
           e.preventDefault()
           divProps.onMouseDown?.(e)
+        }}
+        onTouchStart={(e) => {
+          // Prevent focus loss from editor on touch devices
+          e.preventDefault()
+          divProps.onTouchStart?.(e)
         }}
       >
         {children}
@@ -232,6 +243,7 @@ function PortalItemInner<T>(
   const { value, disabled = false, children, ...divProps } = props
   const context = usePortalListContext()
   const [index, setIndex] = useState<number>(-1)
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
 
   // Register this item on mount
   useLayoutEffect(() => {
@@ -264,6 +276,48 @@ function PortalItemInner<T>(
     [disabled, context, divProps, index]
   )
 
+  // Touch handlers for mobile - activate on touch, select on release
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      const touch = e.touches[0]
+      if (touch) {
+        touchStartPosRef.current = { x: touch.clientX, y: touch.clientY }
+      }
+      // Activate item on touch start (like hover on desktop)
+      if (!disabled && index >= 0) {
+        context.setActiveIndex(index)
+      }
+      divProps.onTouchStart?.(e)
+    },
+    [disabled, context, divProps, index]
+  )
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      const touch = e.changedTouches[0]
+      const startPos = touchStartPosRef.current
+
+      // Only select if touch didn't move significantly (not a scroll gesture)
+      if (touch && startPos) {
+        const dx = Math.abs(touch.clientX - startPos.x)
+        const dy = Math.abs(touch.clientY - startPos.y)
+
+        // If movement was minimal, treat as a tap and select
+        if (dx < 10 && dy < 10) {
+          if (!disabled && index >= 0) {
+            // Prevent the subsequent click event
+            e.preventDefault()
+            context.selectItem(index)
+          }
+        }
+      }
+
+      touchStartPosRef.current = null
+      divProps.onTouchEnd?.(e)
+    },
+    [disabled, context, divProps, index]
+  )
+
   return (
     <div
       ref={ref}
@@ -274,8 +328,15 @@ function PortalItemInner<T>(
       data-active={isActive || undefined}
       data-disabled={disabled || undefined}
       {...divProps}
+      style={{
+        // Prevent double-tap zoom on mobile
+        touchAction: 'manipulation',
+        ...divProps.style
+      }}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       {children}
     </div>

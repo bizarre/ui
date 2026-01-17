@@ -1,6 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
 import { getAbsoluteOffset, setDomSelection } from '../internal/dom-utils'
 
+// Platform detection for iOS-specific handling
+const isIOS =
+  typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+
 export function useComposition(
   editorRef: React.RefObject<HTMLDivElement | null>,
   serializeRawFromDom: () => string,
@@ -20,7 +26,8 @@ export function useComposition(
   const suppressNextKeydownCommitRef = useRef<null | 'enter' | 'space'>(null)
   const compositionCommitKeyRef = useRef<'enter' | 'space' | null>(null)
   const compositionJustEndedAtRef = useRef<number>(0)
-  // Engine detection no longer required; suppression is applied for all engines
+  // Track last composition data for iOS workaround
+  const lastCompositionDataRef = useRef<string>('')
 
   const onCompositionStart = useCallback(() => {
     if (!editorRef.current) return
@@ -44,7 +51,17 @@ export function useComposition(
     compositionInitialValueRef.current = getCurrentValue()
   }, [editorRef, getCurrentValue])
 
-  const onCompositionUpdate = useCallback(() => {}, [])
+  const onCompositionUpdate = useCallback(
+    (event: React.CompositionEvent<HTMLDivElement>) => {
+      // iOS Safari sometimes doesn't include data in compositionend,
+      // so we track the last composition data during updates
+      const data = (event as unknown as { data?: string }).data
+      if (data) {
+        lastCompositionDataRef.current = data
+      }
+    },
+    []
+  )
 
   const onCompositionEnd = useCallback(
     (event: React.CompositionEvent<HTMLDivElement>) => {
@@ -58,6 +75,13 @@ export function useComposition(
 
       // Build committed value
       let committed = (event as unknown as { data?: string }).data || ''
+
+      // iOS Safari workaround: compositionend may not include data,
+      // fall back to last tracked composition data from updates
+      if (!committed && isIOS && lastCompositionDataRef.current) {
+        committed = lastCompositionDataRef.current
+      }
+
       const baseValue = compositionInitialValueRef.current ?? getCurrentValue()
       const range = compositionStartSelectionRef.current ?? { start: 0, end: 0 }
       const len = baseValue.length
@@ -101,6 +125,7 @@ export function useComposition(
       compositionInitialValueRef.current = null
       compositionStartSelectionRef.current = null
       compositionCommitKeyRef.current = null
+      lastCompositionDataRef.current = ''
     },
     [
       editorRef,

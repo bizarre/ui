@@ -30,6 +30,8 @@ import {
   type PortalKeyboardHandler
 } from './portal-list'
 import { useClipboard } from './hooks/use-clipboard'
+import { useVirtualKeyboard } from './hooks/use-virtual-keyboard'
+import { useTouchSelection } from './hooks/use-touch-selection'
 
 export const COMPONENT_NAME = 'Inlay'
 export const TEXT_COMPONENT_NAME = 'Inlay.Text'
@@ -115,6 +117,33 @@ export type InlayProps = ScopedProps<
     onChange?: (value: string) => void
     placeholder?: React.ReactNode
     multiline?: boolean
+    // Mobile input attributes
+    inputMode?:
+      | 'text'
+      | 'search'
+      | 'email'
+      | 'tel'
+      | 'url'
+      | 'numeric'
+      | 'decimal'
+      | 'none'
+    autoCapitalize?:
+      | 'off'
+      | 'none'
+      | 'on'
+      | 'sentences'
+      | 'words'
+      | 'characters'
+    autoCorrect?: 'on' | 'off'
+    enterKeyHint?:
+      | 'enter'
+      | 'done'
+      | 'go'
+      | 'next'
+      | 'previous'
+      | 'search'
+      | 'send'
+    onVirtualKeyboardChange?: (open: boolean) => void
   } & Omit<
     React.HTMLAttributes<HTMLDivElement>,
     'onChange' | 'defaultValue' | 'onKeyDown'
@@ -141,6 +170,12 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
     placeholder,
     multiline = true,
     getPopoverAnchorRect,
+    // Mobile input attributes
+    inputMode = 'text',
+    autoCapitalize = 'sentences',
+    autoCorrect = 'off',
+    enterKeyHint,
+    onVirtualKeyboardChange,
     ...inlayProps
   } = props
 
@@ -326,6 +361,15 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
     pushUndoSnapshot,
     isComposingRef
   })
+  useVirtualKeyboard({
+    editorRef,
+    onVirtualKeyboardChange
+  })
+  const { onTouchStart, onTouchMove, onTouchEnd } = useTouchSelection({
+    editorRef,
+    handleSelectionChange,
+    isComposingRef
+  })
   // Wrap onKeyDown to route through portal keyboard handler first
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -381,6 +425,12 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
                 contentEditable
                 role="textbox"
                 aria-multiline={multiline}
+                // Mobile input attributes
+                inputMode={inputMode}
+                autoCapitalize={autoCapitalize}
+                autoCorrect={autoCorrect}
+                enterKeyHint={enterKeyHint ?? (multiline ? 'enter' : 'done')}
+                spellCheck={false}
                 onSelect={onSelect}
                 onBeforeInput={onBeforeInput}
                 onKeyDown={handleKeyDown}
@@ -390,9 +440,14 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
                 onCopy={onCopy}
                 onCut={onCut}
                 onPaste={onPaste}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
                 suppressContentEditableWarning
                 style={{
                   whiteSpace: 'pre-wrap',
+                  // Prevent double-tap zoom on mobile
+                  touchAction: 'manipulation',
                   ...inlayProps.style
                 }}
               >

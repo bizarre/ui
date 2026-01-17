@@ -58,7 +58,7 @@
   "license": "MIT",
   "scripts": {
     "build": "vite build --config vite.lib.config.ts",
-    "storybook": "storybook dev -p 6006",
+    "storybook": "storybook dev -p 6006 --host 0.0.0.0",
     "build-storybook": "storybook build",
     "typecheck": "tsc --emitDeclarationOnly",
     "lint": "eslint ./src --ext .ts,.tsx",
