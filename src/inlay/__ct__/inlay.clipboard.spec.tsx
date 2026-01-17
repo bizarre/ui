@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/experimental-ct-react'
 import { DivergedTokenInlay } from './fixtures/diverged-token-inlay'
+import { AutoUpdateInlay } from './fixtures/auto-update-inlay'
 
 // Run clipboard tests serially to avoid clipboard state pollution between parallel tests
 test.describe.serial('Clipboard operations with diverged tokens (CT)', () => {
@@ -135,5 +136,73 @@ test.describe.serial('Clipboard operations with diverged tokens (CT)', () => {
 
     await expect(ed.locator('[data-token-text="@alice"]')).toHaveCount(1)
     await expect(ed).toHaveText('Hi Alice')
+  })
+
+  test('Rapid paste maintains caret at end of inserted text', async ({
+    mount,
+    page
+  }) => {
+    await mount(<DivergedTokenInlay initial="" />)
+
+    const ed = page.getByRole('textbox')
+    await ed.click()
+
+    // Write text to clipboard
+    await page.evaluate(() => navigator.clipboard.writeText('abc'))
+
+    // Simulate rapid pasting (like holding Ctrl+V)
+    // Fire multiple paste events in quick succession without waiting
+    const pasteCount = 5
+    for (let i = 0; i < pasteCount; i++) {
+      await page.keyboard.press('ControlOrMeta+v', { delay: 0 })
+    }
+
+    // Expected: "abcabcabcabcabc" with caret at position 15 (end)
+    await expect(ed).toHaveText('abcabcabcabcabc')
+
+    // Type a character to verify caret position - should appear at the end
+    await page.keyboard.type('X')
+    await expect(ed).toHaveText('abcabcabcabcabcX')
+  })
+
+  test('Pasting many auto-updating tokens does not cause infinite loop', async ({
+    mount,
+    page
+  }) => {
+    // Capture React errors (error #185 = Maximum update depth exceeded)
+    const errors: string[] = []
+    page.on('pageerror', (err) => errors.push(err.message))
+
+    await mount(<AutoUpdateInlay initial="" />)
+
+    const ed = page.getByRole('textbox')
+    await ed.click()
+
+    // Paste many tokens that will each trigger an update() call
+    const manyTokens = Array(100).fill('@test').join(' ') + ' '
+    await page.evaluate(
+      (text) => navigator.clipboard.writeText(text),
+      manyTokens
+    )
+    await page.keyboard.press('ControlOrMeta+v')
+
+    // Wait for all updates to process
+    await page.waitForTimeout(500)
+
+    // Should not have crashed with "Maximum update depth exceeded"
+    expect(errors).toHaveLength(0)
+
+    // Should render exactly 100 tokens (no duplicates) in the visible editor
+    // Note: 2-pass rendering means tokens exist in both hidden and visible divs
+    const editor = page.getByRole('textbox')
+    await expect(editor.locator('[data-testid="token-render"]')).toHaveCount(
+      100,
+      { timeout: 5000 }
+    )
+
+    // Caret should be at end after all updates, not position 0
+    await page.keyboard.type('X')
+    const text = await editor.textContent()
+    expect(text?.endsWith('X')).toBe(true)
   })
 })

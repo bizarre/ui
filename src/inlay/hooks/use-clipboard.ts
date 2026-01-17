@@ -1,4 +1,5 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import {
   getAbsoluteOffset,
   setDomSelection,
@@ -70,6 +71,12 @@ function getSelectionFromDom(
 }
 
 export function useClipboard(cfg: ClipboardConfig) {
+  // Track pending selection for rapid operations where DOM hasn't caught up yet
+  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(
+    null
+  )
+  const pendingClearTimeoutRef = useRef<number | null>(null)
+
   const onCopy = useCallback(
     (event: React.ClipboardEvent<HTMLDivElement>) => {
       event.preventDefault()
@@ -127,27 +134,46 @@ export function useClipboard(cfg: ClipboardConfig) {
       const root = cfg.editorRef.current
       if (!root) return
 
-      const sel = getSelectionFromDom(root)
+      // Use pending selection if available (from rapid paste), otherwise read from DOM
+      const sel = pendingSelectionRef.current ?? getSelectionFromDom(root)
       if (!sel) return
 
       cfg.pushUndoSnapshot?.()
 
-      cfg.setValue((currentValue) => {
-        const len = currentValue.length
-        const safeStart = Math.max(0, Math.min(sel.start, len))
-        const safeEnd = Math.max(0, Math.min(sel.end, len))
-        const before = currentValue.slice(0, safeStart)
-        const after = currentValue.slice(safeEnd)
-        const newValue = before + pastedText + after
-        const newSelection = safeStart + pastedText.length
+      const len = cfg.getValue().length
+      const safeStart = Math.max(0, Math.min(sel.start, len))
+      const newSelection = safeStart + pastedText.length
 
-        requestAnimationFrame(() => {
-          const root = cfg.editorRef.current
-          if (root?.isConnected) setDomSelection(root, newSelection)
+      // Update pending selection synchronously BEFORE state update
+      // so subsequent rapid pastes use the correct position
+      pendingSelectionRef.current = { start: newSelection, end: newSelection }
+
+      // Use flushSync to ensure DOM is updated synchronously
+      flushSync(() => {
+        cfg.setValue((currentValue) => {
+          const len = currentValue.length
+          const safeStart = Math.max(0, Math.min(sel.start, len))
+          const safeEnd = Math.max(0, Math.min(sel.end, len))
+          const before = currentValue.slice(0, safeStart)
+          const after = currentValue.slice(safeEnd)
+          return before + pastedText + after
         })
-
-        return newValue
       })
+
+      // Set selection immediately after flushSync (DOM is now updated)
+      if (root.isConnected) {
+        setDomSelection(root, newSelection)
+      }
+
+      // Clear pending selection after a short delay, giving time for
+      // rapid paste events to complete before falling back to DOM
+      if (pendingClearTimeoutRef.current !== null) {
+        clearTimeout(pendingClearTimeoutRef.current)
+      }
+      pendingClearTimeoutRef.current = window.setTimeout(() => {
+        pendingClearTimeoutRef.current = null
+        pendingSelectionRef.current = null
+      }, 100)
     },
     [cfg]
   )

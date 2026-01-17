@@ -179,33 +179,28 @@ export const StructuredInlay = <
     [setValue]
   )
 
-  // Update a token by ID - stable function that doesn't depend on match object
-  const updateTokenById = React.useCallback((tokenId: string, newData: any) => {
-    // Capture current selection absolute offsets relative to the editor root
-    const rootEl = rootRef.current?.root
-    let capturedSelection: { start: number; end: number } | null = null
-    if (rootEl) {
-      const sel = window.getSelection()
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0)
-        const start = getAbsoluteOffset(
-          rootEl,
-          range.startContainer,
-          range.startOffset
-        )
-        const end = getAbsoluteOffset(
-          rootEl,
-          range.endContainer,
-          range.endOffset
-        )
-        capturedSelection = { start, end }
-      }
-    }
+  // Batched update queue to avoid max update depth with many simultaneous updates
+  const pendingUpdatesRef = React.useRef<Map<string, any>>(new Map())
+  const pendingSelectionRef = React.useRef<{
+    start: number
+    end: number
+  } | null>(null)
+  const flushTimeoutRef = React.useRef<number | null>(null)
+
+  const flushPendingUpdates = React.useCallback(() => {
+    flushTimeoutRef.current = null
+    const updates = pendingUpdatesRef.current
+    if (updates.size === 0) return
+
+    const capturedSelection = pendingSelectionRef.current
+    pendingUpdatesRef.current = new Map()
+    pendingSelectionRef.current = null
 
     flushSync(() => {
       setLiveTokens((currentTokens) =>
         currentTokens.map((token) => {
-          if (token.id === tokenId) {
+          const newData = updates.get(token.id)
+          if (newData !== undefined) {
             return {
               ...token,
               data: { ...(token.data as any), ...newData }
@@ -222,16 +217,55 @@ export const StructuredInlay = <
       if (rootImmediate && document.activeElement === rootImmediate) {
         rootRef.current?.setSelection(start, end)
       }
-      const restore = () => {
+      requestAnimationFrame(() => {
         const root = rootRef.current?.root
         const isFocused = document.activeElement === root
         if (root && isFocused) {
           rootRef.current?.setSelection(start, end)
         }
-      }
-      requestAnimationFrame(restore)
+      })
     }
   }, [])
+
+  // Update a token by ID - queues update and flushes once per frame
+  const updateTokenById = React.useCallback(
+    (tokenId: string, newData: any) => {
+      // Capture selection ONCE at start of batch
+      if (pendingSelectionRef.current === null) {
+        const rootEl = rootRef.current?.root
+        if (rootEl) {
+          const sel = window.getSelection()
+          if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0)
+            if (rootEl.contains(range.startContainer)) {
+              const start = getAbsoluteOffset(
+                rootEl,
+                range.startContainer,
+                range.startOffset
+              )
+              const end = getAbsoluteOffset(
+                rootEl,
+                range.endContainer,
+                range.endOffset
+              )
+              pendingSelectionRef.current = { start, end }
+            }
+          }
+        }
+      }
+
+      // Queue the update
+      pendingUpdatesRef.current.set(tokenId, newData)
+
+      // Debounce: reset timer on each update, flush after updates stop for 16ms
+      // This batches updates that arrive across multiple event loop cycles
+      if (flushTimeoutRef.current !== null) {
+        clearTimeout(flushTimeoutRef.current)
+      }
+      flushTimeoutRef.current = window.setTimeout(flushPendingUpdates, 16)
+    },
+    [flushPendingUpdates]
+  )
 
   // Cache of stable update functions per token ID
   const updateFunctionsRef = React.useRef(
