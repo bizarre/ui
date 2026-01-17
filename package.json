@@ -90,6 +90,7 @@
     "timezone-enum": "^1.0.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
     "@heroicons/react": "^2.2.0",
     "@playwright/experimental-ct-react": "^1.54.2",
     "@playwright/test": "^1.54.2",

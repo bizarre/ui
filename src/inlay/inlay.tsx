@@ -332,6 +332,7 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
             {/* Second pass: renders weaved content */}
             <div style={{ position: 'relative' }}>
               <div
+                aria-label="Text input"
                 {...inlayProps}
                 ref={editorRef}
                 // required to clear browser-inserted IME text
