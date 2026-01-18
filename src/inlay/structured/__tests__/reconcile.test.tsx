@@ -1,5 +1,5 @@
 import React from 'react'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, act } from '@testing-library/react'
 import { StructuredInlay } from '../../structured/structured-inlay'
 import { createRegexMatcher } from '../../internal/string-utils'
@@ -32,6 +32,14 @@ function plugin() {
 }
 
 describe('StructuredInlay reconcile', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('preserves token data across edits for duplicates via nearest-unused matching', async () => {
     const p = plugin()
 
@@ -61,6 +69,8 @@ describe('StructuredInlay reconcile', () => {
 
     await act(async () => {
       p.updates[0]({ name: 'X' })
+      // Flush the 16ms debounce used by updateTokenById
+      vi.advanceTimersByTime(20)
     })
 
     await act(async () => {
