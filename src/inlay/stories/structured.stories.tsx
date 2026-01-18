@@ -115,6 +115,7 @@ export const Structured = () => {
     <div className="bg-gray-100 p-8 flex justify-center min-h-screen items-start">
       <div className="w-full max-w-2xl bg-white rounded-xl shadow-md p-4">
         <Inlay.StructuredInlay
+          autoCorrect="on"
           plugins={[
             mentions({
               render: ({ token, update }) => (

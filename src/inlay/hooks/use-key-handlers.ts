@@ -118,14 +118,21 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
         return
       }
 
-      // Android GBoard sends insertReplacementText for word predictions/autocomplete
+      // Android GBoard and iOS Safari send insertReplacementText for word predictions/autocomplete
       // This replaces text in a specific range with new text
+      // Android: replacement text is in event.data
+      // iOS Safari: replacement text is in event.dataTransfer.getData('text/plain')
       if (inputType === 'insertReplacementText') {
         event.preventDefault()
 
         // Get the target range from the native event
         const targetRanges = event.getTargetRanges?.()
-        if (!targetRanges || targetRanges.length === 0 || !data) return
+        if (!targetRanges || targetRanges.length === 0) return
+
+        // Get replacement text: try data first (Android), then dataTransfer (iOS Safari)
+        const replacementText =
+          data ?? event.dataTransfer?.getData('text/plain')
+        if (!replacementText) return
 
         const targetRange = targetRanges[0]
         const replaceStart = getAbsoluteOffset(
@@ -146,8 +153,8 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
           const safeEnd = Math.max(0, Math.min(replaceEnd, len))
           const before = currentValue.slice(0, safeStart)
           const after = currentValue.slice(safeEnd)
-          const newValue = before + data + after
-          const newSelection = safeStart + data.length
+          const newValue = before + replacementText + after
+          const newSelection = safeStart + replacementText.length
           scheduleSelection(() => {
             const root = editorRef.current
             if (!root || !root.isConnected) return

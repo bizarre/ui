@@ -544,3 +544,194 @@ test.describe('iOS swipe-text bug', () => {
     expect(result.hasTrailingSpace).toBe(true)
   })
 })
+
+/**
+ * iOS Safari Text Suggestion Bug
+ *
+ * THE BUG (from real iOS device testing):
+ * When user types "hel" and taps a keyboard suggestion "hello":
+ * 1. iOS fires insertReplacementText with data=null but dataTransfer="hello"
+ * 2. Our code checks `if (!data) return` and bails out
+ * 3. iOS then fires insertText with data=" " to insert a space
+ * 4. Result: "hel" becomes " " instead of "hello"
+ *
+ * EXPECTED: "hel" → "hello" (the suggested word)
+ * ACTUAL BUG: "hel" → " " (just a space)
+ *
+ * THE FIX: Check event.dataTransfer.getData('text/plain') as fallback when data is null
+ */
+test.describe('iOS Safari text suggestion', () => {
+  /**
+   * iOS Safari sends insertReplacementText with the replacement text in
+   * dataTransfer instead of data (unlike Android GBoard which uses data).
+   *
+   * Note: This test is skipped on webkit/mobile-safari because the test environment
+   * doesn't support passing DataTransfer to InputEvent constructor. The fix has been
+   * verified on real iOS Safari devices via console logging.
+   */
+  test('tapping a keyboard suggestion should replace in-progress word', async ({
+    mount,
+    page,
+    browserName
+  }) => {
+    // Skip webkit in test environment - DataTransfer constructor doesn't work the same way
+    // Real iOS Safari behavior verified via console logging on actual device
+    test.skip(
+      browserName === 'webkit',
+      'webkit test env does not support DataTransfer in InputEvent constructor'
+    )
+
+    await mount(
+      <Inlay.Root defaultValue="" data-testid="root">
+        {null}
+      </Inlay.Root>
+    )
+
+    const ed = page.getByRole('textbox')
+    await ed.click()
+
+    // Step 1: Type "hel" (simulating user typing before suggestion)
+    await page.keyboard.type('hel')
+    await expect(ed).toHaveText('hel')
+
+    // Step 2: Simulate iOS Safari text suggestion tap
+    // iOS sends insertReplacementText with data=null and replacement in dataTransfer
+    const result = await page.evaluate(async () => {
+      const editor = document.querySelector('[role="textbox"]') as HTMLElement
+
+      // Find the text node containing "hel"
+      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+      let textNode: Text | null = null
+      while (walker.nextNode()) {
+        const node = walker.currentNode as Text
+        if (node.textContent && node.textContent.includes('hel')) {
+          textNode = node
+          break
+        }
+      }
+
+      if (!textNode) {
+        return {
+          error: 'No text node found',
+          editorContent: editor.textContent
+        }
+      }
+
+      // Create a mock DataTransfer with the suggestion text
+      const dataTransfer = new DataTransfer()
+      dataTransfer.setData('text/plain', 'hello')
+
+      // Create the insertReplacementText event (iOS Safari style)
+      const replaceEvent = new InputEvent('beforeinput', {
+        inputType: 'insertReplacementText',
+        data: null, // iOS Safari puts null here!
+        dataTransfer: dataTransfer,
+        bubbles: true,
+        cancelable: true
+      })
+
+      // Set up getTargetRanges to return the range to replace ("hel" at 0-3)
+      const textContent = textNode.textContent || ''
+      const helStart = textContent.indexOf('hel')
+      ;(replaceEvent as any).getTargetRanges = () => [
+        {
+          startContainer: textNode,
+          startOffset: helStart >= 0 ? helStart : 0,
+          endContainer: textNode,
+          endOffset: helStart >= 0 ? helStart + 3 : 3,
+          collapsed: false
+        }
+      ]
+
+      editor.dispatchEvent(replaceEvent)
+
+      // Wait for React to process
+      await new Promise((r) => setTimeout(r, 50))
+
+      return {
+        finalText: editor.textContent?.replace(/\u200B/g, ''),
+        wasReplaced: editor.textContent?.includes('hello')
+      }
+    })
+
+    console.log('iOS text suggestion result:', JSON.stringify(result, null, 2))
+
+    // EXPECTED: "hel" should be replaced with "hello"
+    // ACTUAL BUG: "hel" remains unchanged because we bail out when data is null
+    expect(result.error).toBeUndefined()
+    expect(result.finalText).toBe('hello')
+    expect(result.wasReplaced).toBe(true)
+  })
+
+  /**
+   * Verify that Android-style insertReplacementText (with data in event.data)
+   * still works after the iOS fix.
+   */
+  test('Android GBoard style suggestion should still work', async ({
+    mount,
+    page
+  }) => {
+    await mount(
+      <Inlay.Root defaultValue="" data-testid="root">
+        {null}
+      </Inlay.Root>
+    )
+
+    const ed = page.getByRole('textbox')
+    await ed.click()
+
+    // Type "hel"
+    await page.keyboard.type('hel')
+    await expect(ed).toHaveText('hel')
+
+    // Simulate Android GBoard style - data is in event.data (not dataTransfer)
+    const result = await page.evaluate(async () => {
+      const editor = document.querySelector('[role="textbox"]') as HTMLElement
+
+      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+      let textNode: Text | null = null
+      while (walker.nextNode()) {
+        const node = walker.currentNode as Text
+        if (node.textContent && node.textContent.includes('hel')) {
+          textNode = node
+          break
+        }
+      }
+
+      if (!textNode) {
+        return { error: 'No text node found' }
+      }
+
+      // Android style: data is in event.data
+      const replaceEvent = new InputEvent('beforeinput', {
+        inputType: 'insertReplacementText',
+        data: 'hello', // Android puts the replacement here
+        bubbles: true,
+        cancelable: true
+      })
+
+      const textContent = textNode.textContent || ''
+      const helStart = textContent.indexOf('hel')
+      ;(replaceEvent as any).getTargetRanges = () => [
+        {
+          startContainer: textNode,
+          startOffset: helStart >= 0 ? helStart : 0,
+          endContainer: textNode,
+          endOffset: helStart >= 0 ? helStart + 3 : 3,
+          collapsed: false
+        }
+      ]
+
+      editor.dispatchEvent(replaceEvent)
+
+      await new Promise((r) => setTimeout(r, 50))
+
+      return {
+        finalText: editor.textContent?.replace(/\u200B/g, '')
+      }
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.finalText).toBe('hello')
+  })
+})
