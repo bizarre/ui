@@ -4,6 +4,14 @@ import { AutoUpdateInlay } from './fixtures/auto-update-inlay'
 
 // Run clipboard tests serially to avoid clipboard state pollution between parallel tests
 test.describe.serial('Clipboard operations with diverged tokens (CT)', () => {
+  // Skip on mobile-safari: WebKit's mobile emulation has different clipboard behavior
+  // that causes copy/paste operations to behave unexpectedly. Desktop webkit passes.
+  test.beforeEach(async ({}, testInfo) => {
+    test.skip(
+      testInfo.project.name === 'mobile-safari',
+      'Skipped on mobile-safari: clipboard behavior differs in mobile WebKit emulation'
+    )
+  })
   test('Select all (Ctrl/Cmd+a) selects entire content', async ({
     mount,
     page
