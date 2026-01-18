@@ -1,0 +1,4 @@
+# Ignore local development notes
+TODO.md
+TODO.local.md
+*.private.md 

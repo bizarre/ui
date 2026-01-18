@@ -18,6 +18,16 @@ interface CodeExamplePanelProps {
   supportingText?: string
 }
 
+const colors = {
+  cream: '#FAF7F2',
+  creamDark: '#F0EBE3',
+  ink: '#1a1816',
+  inkLight: '#3d3835',
+  inkMuted: '#6b6460',
+  coral: '#E85D4C',
+  sage: '#7D9F8E'
+}
+
 export default function CodeExamplePanel({
   title = 'Example Code',
   defaultOpen = false,
@@ -33,13 +43,11 @@ export default function CodeExamplePanel({
 
   const activeCode = tabs.find((tab) => tab.value === activeTab)?.code || ''
 
-  // Handle when content refs update
   const updateTabHeight = (
     tabValue: string,
     element: HTMLDivElement | null
   ) => {
     if (element) {
-      // Small delay to ensure content has fully rendered
       setTimeout(() => {
         const height = element.scrollHeight
         setTabHeights((prev) => ({
@@ -50,7 +58,6 @@ export default function CodeExamplePanel({
     }
   }
 
-  // Update heights when tab changes or content loads
   useEffect(() => {
     const currentRef = contentRefs.current[activeTab]
     if (currentRef && highlighterLoadedRef.current[activeTab]) {
@@ -67,43 +74,89 @@ export default function CodeExamplePanel({
   return (
     <div className="w-full">
       <Collapsible.Root open onOpenChange={setOpen} className="w-full">
-        <Collapsible.Trigger className="flex w-full items-center justify-between p-3 rounded-t-lg bg-zinc-900/80 hover:bg-zinc-900 border border-zinc-800/80 transition-colors">
+        <Collapsible.Trigger
+          className="flex w-full items-center justify-between p-3 rounded-t-sm transition-colors"
+          style={{
+            backgroundColor: colors.ink,
+            border: `1px solid ${colors.ink}`
+          }}
+        >
           <div className="flex items-center gap-2">
-            <Code className="h-4 w-4 text-zinc-400" />
-            <span className="text-sm font-medium text-zinc-300">{title}</span>
+            <Code
+              className="h-4 w-4"
+              style={{ color: 'rgba(255,255,255,0.6)' }}
+            />
+            <span
+              className="text-sm font-medium"
+              style={{ color: 'rgba(255,255,255,0.9)' }}
+            >
+              {title}
+            </span>
           </div>
           <div
             className={`transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
           >
-            <ChevronRight className="h-4 w-4 text-zinc-400" />
+            <ChevronRight
+              className="h-4 w-4"
+              style={{ color: 'rgba(255,255,255,0.6)' }}
+            />
           </div>
         </Collapsible.Trigger>
 
         <Collapsible.Content className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-          <div className="border-x border-b border-zinc-800/80 rounded-b-lg overflow-hidden">
+          <div
+            className="rounded-b-sm overflow-hidden"
+            style={{ border: `1px solid ${colors.ink}25`, borderTop: 'none' }}
+          >
             <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
-              <Tabs.List className="flex border-b border-zinc-800/80 bg-black/20">
+              <Tabs.List
+                className="flex"
+                style={{
+                  borderBottom: `1px solid ${colors.ink}20`,
+                  backgroundColor: `${colors.inkLight}40`
+                }}
+              >
                 {tabs.map((tab) => (
                   <Tabs.Trigger
                     key={tab.value}
                     value={tab.value}
-                    className="px-4 py-2 text-sm transition-colors data-[state=active]:text-violet-400 data-[state=active]:border-b-2 data-[state=active]:border-violet-500 data-[state=active]:-mb-px text-zinc-500 hover:text-zinc-400 font-medium"
+                    className="px-4 py-2 text-sm transition-colors font-medium data-[state=active]:-mb-px"
+                    style={{
+                      color:
+                        activeTab === tab.value
+                          ? colors.coral
+                          : colors.inkMuted,
+                      borderBottom:
+                        activeTab === tab.value
+                          ? `2px solid ${colors.coral}`
+                          : 'none'
+                    }}
                   >
                     {tab.label}
                   </Tabs.Trigger>
                 ))}
               </Tabs.List>
 
-              <div className="relative bg-black/30">
+              <div className="relative" style={{ backgroundColor: colors.ink }}>
                 <button
                   onClick={handleCopy}
-                  className="absolute top-3 right-3 text-xs flex items-center gap-1.5 text-zinc-500 px-2.5 py-1 rounded-md bg-zinc-800/80 hover:bg-zinc-800 hover:text-zinc-300 transition-colors border border-zinc-700/50 z-10"
+                  className="absolute top-3 right-3 text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-sm transition-colors z-10"
+                  style={{
+                    color: 'rgba(255,255,255,0.4)',
+                    backgroundColor: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)'
+                  }}
                   aria-label="Copy code to clipboard"
                 >
                   {copied ? (
                     <span className="flex items-center gap-1.5">
-                      <Check className="h-3 w-3 text-emerald-400" />
-                      <span>Copied</span>
+                      <Check
+                        className="h-3 w-3"
+                        style={{ color: colors.sage }}
+                      />
+                      <span style={{ color: 'rgba(255,255,255,0.7)' }}>
+                        Copied
+                      </span>
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5">
@@ -132,7 +185,6 @@ export default function CodeExamplePanel({
                         load={() =>
                           import('../components/shiki-highlighter').then(
                             (m) => {
-                              // Mark this highlighter as loaded
                               highlighterLoadedRef.current[tab.value] = true
                               return m.default
                             }
@@ -141,12 +193,12 @@ export default function CodeExamplePanel({
                         fallback={
                           <div className="flex items-start p-5">
                             <div className="w-full animate-pulse">
-                              {/* Generate lines based on code length */}
                               {tab.code.split('\n').map((_, i) => (
                                 <div
                                   key={i}
-                                  className="h-[21px] bg-zinc-800/50 rounded mb-1.5"
+                                  className="h-[21px] rounded mb-1.5"
                                   style={{
+                                    backgroundColor: 'rgba(255,255,255,0.1)',
                                     width: `${Math.min(100, 30 + Math.random() * 70)}%`
                                   }}
                                 ></div>
@@ -170,7 +222,14 @@ export default function CodeExamplePanel({
             </Tabs.Root>
 
             {supportingText && (
-              <div className="p-3 text-xs text-zinc-400 border-t border-zinc-800/50 bg-black/20">
+              <div
+                className="p-3 text-xs"
+                style={{
+                  color: colors.inkMuted,
+                  borderTop: `1px solid ${colors.ink}15`,
+                  backgroundColor: colors.creamDark
+                }}
+              >
                 {supportingText}
               </div>
             )}

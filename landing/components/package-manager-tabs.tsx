@@ -11,6 +11,11 @@ const commands: Record<PackageManager, string> = {
   npm: 'npm install @bizarre/ui'
 }
 
+const colors = {
+  coral: '#E85D4C',
+  sage: '#7D9F8E'
+}
+
 export default function PackageManagerTabs() {
   const [activeTab, setActiveTab] = useState<PackageManager>('bun')
   const [copied, setCopied] = useState(false)
@@ -27,12 +32,21 @@ export default function PackageManagerTabs() {
         value={activeTab}
         onValueChange={(value) => setActiveTab(value as PackageManager)}
       >
-        <Tabs.List className="flex border-b border-zinc-800/80 mb-5">
+        <Tabs.List
+          className="flex mb-4"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}
+        >
           {Object.keys(commands).map((pm) => (
             <Tabs.Trigger
               key={pm}
               value={pm}
-              className="px-4 py-2 text-sm transition-colors duration-200 font-medium data-[state=active]:text-violet-400 data-[state=active]:border-b-2 data-[state=active]:border-violet-500 data-[state=active]:-mb-px text-zinc-500 hover:text-zinc-400"
+              className="px-4 py-2 text-sm transition-colors duration-150 font-mono data-[state=active]:-mb-px"
+              style={{
+                color:
+                  activeTab === pm ? colors.coral : 'rgba(255,255,255,0.4)',
+                borderBottom:
+                  activeTab === pm ? `2px solid ${colors.coral}` : 'none'
+              }}
             >
               {pm}
             </Tabs.Trigger>
@@ -41,18 +55,28 @@ export default function PackageManagerTabs() {
 
         {Object.entries(commands).map(([pm, command]) => (
           <Tabs.Content key={pm} value={pm} className="relative">
-            <pre className="font-mono text-zinc-300 text-sm px-4 py-3 bg-black/30 rounded-md overflow-x-auto border border-zinc-800/80">
-              <code>{command}</code>
+            <pre
+              className="font-mono text-sm py-2 overflow-x-auto"
+              style={{ color: 'rgba(255,255,255,0.9)' }}
+            >
+              <code>
+                <span style={{ color: colors.sage }}>$</span> {command}
+              </code>
             </pre>
             <button
               onClick={handleCopy}
-              className="absolute top-2.5 right-2.5 text-xs flex items-center gap-1.5 text-zinc-500 px-2.5 py-1 rounded-md bg-zinc-800/80 hover:bg-zinc-800 hover:text-zinc-300 transition-colors border border-zinc-700/50"
+              className="absolute top-0 right-0 text-xs flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm transition-colors hover:bg-white/10"
+              style={{
+                color: 'rgba(255,255,255,0.4)',
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}
               aria-label="Copy to clipboard"
             >
               {copied ? (
                 <span className="flex items-center gap-1.5">
-                  <Check className="h-3 w-3 text-emerald-400" />
-                  <span>Copied</span>
+                  <Check className="h-3 w-3" style={{ color: colors.sage }} />
+                  <span style={{ color: 'rgba(255,255,255,0.7)' }}>Copied</span>
                 </span>
               ) : (
                 <span className="flex items-center gap-1.5">
