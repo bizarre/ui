@@ -324,6 +324,7 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
   }, [])
   const { onBeforeInput, onKeyDown } = useKeyHandlers({
     editorRef,
+    contentKey,
     multiline,
     onKeyDownProp,
     beginEditSession,

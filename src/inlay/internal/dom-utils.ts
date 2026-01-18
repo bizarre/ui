@@ -297,6 +297,12 @@ export const setDomSelection = (
     : [startNode, startOffset]
 
   if (startNode && endNode) {
+    // Guard against NotFoundError on iOS: nodes may have been removed
+    // by React re-renders between scheduling and execution
+    if (!startNode.isConnected || !endNode.isConnected) {
+      return
+    }
+
     const range = document.createRange()
     range.setStart(startNode, startOffset)
     range.setEnd(endNode, endOffset)

@@ -8,6 +8,36 @@ function flush() {
   return new Promise((r) => setTimeout(r, 0))
 }
 
+// Helper to dispatch native beforeinput event for backspace
+// This is needed because our handler uses native event listeners
+function fireBackspace(element: HTMLElement) {
+  const sel = window.getSelection()
+  // Range is captured for potential future use in getTargetRanges simulation
+  const _range = sel?.rangeCount ? sel.getRangeAt(0) : null
+  void _range // Acknowledge intentionally unused
+
+  const event = new InputEvent('beforeinput', {
+    bubbles: true,
+    cancelable: true,
+    inputType: 'deleteContentBackward',
+    data: null
+  })
+
+  // jsdom doesn't support getTargetRanges, so we need to ensure selection is set
+  element.dispatchEvent(event)
+}
+
+// Helper to dispatch native beforeinput for delete forward
+function fireDelete(element: HTMLElement) {
+  const event = new InputEvent('beforeinput', {
+    bubbles: true,
+    cancelable: true,
+    inputType: 'deleteContentForward',
+    data: null
+  })
+  element.dispatchEvent(event)
+}
+
 // Empty state rendering
 describe('Inlay empty state', () => {
   it('renders zero-width space for consistent caret height', async () => {
@@ -85,7 +115,7 @@ describe('Inlay Backspace semantics', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Backspace' })
+      fireBackspace(ed)
       await flush()
     })
 
@@ -114,7 +144,7 @@ describe('Inlay Backspace semantics', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Backspace' })
+      fireBackspace(ed)
       await flush()
     })
 
@@ -143,7 +173,7 @@ describe('Inlay Backspace semantics', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Backspace' })
+      fireBackspace(ed)
       await flush()
     })
 
@@ -179,7 +209,7 @@ describe('Inlay Backspace semantics', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Backspace' })
+      fireBackspace(ed)
       await flush()
     })
 
@@ -214,7 +244,7 @@ describe('Inlay Backspace semantics', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Backspace' })
+      fireBackspace(ed)
       await flush()
     })
 
@@ -337,7 +367,7 @@ describe('Inlay Backspace with grapheme clusters', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Backspace' })
+      fireBackspace(ed)
       await flush()
     })
 
@@ -370,7 +400,7 @@ describe('Inlay Backspace with grapheme clusters', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Backspace' })
+      fireBackspace(ed)
       await flush()
     })
 
@@ -397,7 +427,7 @@ describe('Inlay Backspace with grapheme clusters', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Backspace' })
+      fireBackspace(ed)
       await flush()
     })
 
@@ -430,7 +460,7 @@ describe('Inlay selection deletion is grapheme-aware', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Backspace' })
+      fireBackspace(ed)
       await flush()
     })
 
@@ -465,7 +495,7 @@ describe('Inlay selection deletion is grapheme-aware', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Delete' })
+      fireDelete(ed)
       await flush()
     })
 
@@ -497,7 +527,7 @@ describe('Inlay grapheme advanced cases', () => {
       await flush()
     })
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Backspace' })
+      fireBackspace(ed)
       await flush()
     })
     expect(ed.textContent).toBe('\u200B')
@@ -514,7 +544,7 @@ describe('Inlay grapheme advanced cases', () => {
       await flush()
     })
     await act(async () => {
-      fireEvent.keyDown(ed, { key: 'Delete' })
+      fireDelete(ed)
       await flush()
     })
     expect(ed.textContent).toBe('\u200B')
