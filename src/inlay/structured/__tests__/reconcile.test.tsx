@@ -1,6 +1,6 @@
 import React from 'react'
 import { describe, it, expect } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, act } from '@testing-library/react'
 import { StructuredInlay } from '../../structured/structured-inlay'
 import { createRegexMatcher } from '../../internal/string-utils'
 
@@ -16,7 +16,13 @@ function plugin() {
 
   return {
     matcher,
-    render: ({ token, update }: { token: TData; update: (d: Partial<TData>) => void }) => {
+    render: ({
+      token,
+      update
+    }: {
+      token: TData
+      update: (d: Partial<TData>) => void
+    }) => {
       updates.push(update)
       return <span data-testid="tok">{token.name ?? token.raw}</span>
     },
@@ -29,9 +35,15 @@ describe('StructuredInlay reconcile', () => {
   it('preserves token data across edits for duplicates via nearest-unused matching', async () => {
     const p = plugin()
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function Test({ value, onChange }: any) {
       return (
-        <StructuredInlay value={value} onChange={onChange} plugins={[p] as any} />
+        <StructuredInlay
+          value={value}
+          onChange={onChange}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          plugins={[p] as any}
+        />
       )
     }
 
@@ -60,4 +72,4 @@ describe('StructuredInlay reconcile', () => {
     ).map((n) => n.textContent)
     expect(labels).toContain('X')
   })
-}) 
+})
