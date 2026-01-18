@@ -5,6 +5,7 @@ import type { PageContextServer } from 'vike/types'
 import type { ComponentType } from 'react'
 
 export function onRenderHtml(pageContext: PageContextServer) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Page = pageContext.Page as ComponentType<any>
 
   const { pageProps } = pageContext as PageContextServer & {
@@ -27,7 +28,7 @@ export function onRenderHtml(pageContext: PageContextServer) {
         <title>@bizarre/ui</title>
         <meta name="description" content="A collection of headless React components nobody asked for" />
       </head>
-      <body style="background-color: #000;">
+      <body style="background-color: #0A0A0A;">
         <div id="root">${dangerouslySkipEscape(pageHtml)}</div>
       </body>
     </html>`

@@ -1,86 +1,171 @@
 @import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:wght@400;500&display=swap');
 
+@theme {
+  --color-bg: #0A0A0A;
+  --color-surface: #111111;
+  --color-surface-light: #1A1A1A;
+  --color-border: #222222;
+  --color-border-light: #333333;
+  
+  --color-text: #FFFFFF;
+  --color-text-muted: #888888;
+  --color-text-dim: #555555;
+  
+  --color-magenta: #FF2D92;
+  --color-cyan: #00F0FF;
+  --color-lime: #B8FF00;
+
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Selection */
+::selection {
+  background-color: var(--color-magenta);
+  color: white;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-light);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-dim);
+}
+
+/* Collapsible animations for Radix */
 @keyframes collapsible-down {
-  from {
-    height: 0;
-  }
-  to {
-    height: var(--radix-collapsible-content-height);
-  }
+  from { height: 0; }
+  to { height: var(--radix-collapsible-content-height); }
 }
 
 @keyframes collapsible-up {
-  from {
-    height: var(--radix-collapsible-content-height);
-  }
-  to {
-    height: 0;
-  }
+  from { height: var(--radix-collapsible-content-height); }
+  to { height: 0; }
 }
 
 .animate-collapsible-down {
-  animation: collapsible-down 300ms ease-out;
+  animation: collapsible-down 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .animate-collapsible-up {
-  animation: collapsible-up 300ms ease-out;
+  animation: collapsible-up 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Radix UI animations */
+/* Dialog/Portal animations */
 @keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes fade-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes zoom-in {
-  from {
-    transform: scale(0.95);
-  }
-  to {
-    transform: scale(1);
-  }
-}
-
-@keyframes zoom-out {
-  from {
-    transform: scale(1);
-  }
-  to {
-    transform: scale(0.95);
-  }
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 
 .animate-in {
-  animation-duration: 150ms;
-  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform, opacity;
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .fade-in-0 {
   animation-name: fade-in;
 }
 
-.fade-out-0 {
-  animation-name: fade-out;
-}
-
 .zoom-in-95 {
   animation-name: zoom-in;
 }
 
-.zoom-out-95 {
-  animation-name: zoom-out;
+/* Pulse for cursor */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.animate-pulse {
+  animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Bounce animation */
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(25%); }
+}
+
+.animate-bounce {
+  animation: bounce 1s ease-in-out infinite;
+}
+
+/* Scroll snap utilities */
+.snap-y {
+  scroll-snap-type: y mandatory;
+}
+
+.snap-mandatory {
+  scroll-snap-type: y mandatory;
+}
+
+.snap-start {
+  scroll-snap-align: start;
+}
+
+.snap-always {
+  scroll-snap-stop: always;
+}
+
+/* Prose styles for documentation */
+.prose {
+  line-height: 1.75;
+}
+
+.prose p {
+  margin-bottom: 1rem;
+}
+
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  background-color: var(--color-surface-light);
+}
+
+.prose-invert {
+  color: var(--color-text-muted);
+}
+
+.prose-sm {
+  font-size: 0.875rem;
 }

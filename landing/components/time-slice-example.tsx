@@ -12,6 +12,15 @@ import {
   differenceInSeconds
 } from 'date-fns'
 
+const colors = {
+  bg: '#0A0A0A',
+  surface: '#111111',
+  border: '#222222',
+  text: '#FFFFFF',
+  textMuted: '#888888',
+  cyan: '#00F0FF'
+}
+
 export default function TimeSliceExample() {
   const [dateRange, setDateRange] = React.useState<DateRange>({
     startDate: new Date(Date.now() - 1000 * 60 * 15), // 15 minutes ago
@@ -55,14 +64,30 @@ export default function TimeSliceExample() {
     >
       <TimeSlice.Trigger asChild>
         <div className="flex items-center space-x-2 w-full">
-          <div className="flex-1 flex items-center border border-zinc-800/80 hover:border-zinc-700 bg-zinc-900/60 backdrop-blur-sm rounded-md px-3 py-2 transition-all duration-200 cursor-pointer group">
-            <div className="flex items-center space-x-2 w-full">
-              <div className="h-[22px] min-w-[44px] bg-zinc-800/80 border border-zinc-700/50 rounded-md text-xs text-center leading-[22px] mr-2 text-zinc-300 transition-colors group-hover:border-zinc-700 group-hover:bg-zinc-800">
+          <div
+            className="flex-1 flex items-center rounded-lg px-4 py-3 transition-all duration-200 cursor-pointer group"
+            style={{
+              border: `1px solid ${colors.border}`,
+              backgroundColor: colors.surface
+            }}
+          >
+            <div className="flex items-center space-x-3 w-full">
+              <div
+                className="h-6 min-w-[48px] rounded text-xs text-center leading-6 font-mono font-medium"
+                style={{
+                  backgroundColor: `${colors.cyan}20`,
+                  color: colors.cyan
+                }}
+              >
                 {activeDurationLabel}
               </div>
-              <TimeSlice.Input className="bg-transparent text-sm text-zinc-300 w-full outline-none border-none cursor-pointer overflow-hidden truncate" />
+              <TimeSlice.Input
+                className="bg-transparent text-sm w-full outline-none border-none cursor-pointer overflow-hidden truncate"
+                style={{ color: colors.textMuted }}
+              />
               <div
-                className={`text-zinc-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                style={{ color: colors.textMuted }}
               >
                 <ChevronDown className="h-4 w-4" />
               </div>
@@ -71,32 +96,90 @@ export default function TimeSliceExample() {
         </div>
       </TimeSlice.Trigger>
 
-      <TimeSlice.Portal className="relative backdrop-blur-md bg-zinc-900/95 border border-zinc-800/80 rounded-md mt-1.5 p-1.5 flex flex-col gap-1 text-sm shadow-xl z-50 w-full transition-all duration-100 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95">
-        <div className="pb-1.5 px-1.5 mb-1 border-b border-zinc-800/50">
-          <div className="text-xs text-zinc-400 font-medium">Quick select</div>
+      <TimeSlice.Portal
+        className="relative rounded-lg mt-2 p-1.5 flex flex-col gap-0.5 text-sm shadow-2xl z-50 w-full transition-all duration-100 animate-in fade-in-0 zoom-in-95"
+        style={{
+          backgroundColor: colors.surface,
+          border: `1px solid ${colors.border}`
+        }}
+      >
+        <div
+          className="pb-2 px-2 mb-1"
+          style={{ borderBottom: `1px solid ${colors.border}` }}
+        >
+          <div
+            className="text-[10px] font-mono font-medium uppercase tracking-widest"
+            style={{ color: colors.textMuted }}
+          >
+            Quick select
+          </div>
         </div>
         <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
-          <div className="hover:bg-zinc-800 active:bg-zinc-800/80 focus:bg-zinc-800 p-2 rounded-sm text-zinc-300 cursor-pointer transition-colors duration-150 flex items-center justify-between">
-            <span>15 minutes</span>
-            <span className="text-xs text-zinc-500">15m</span>
+          <div
+            className="p-2.5 rounded-md cursor-pointer transition-colors duration-100 flex items-center justify-between"
+            style={{ color: colors.text }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = `${colors.cyan}10`)
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = 'transparent')
+            }
+          >
+            <span className="text-sm">15 minutes</span>
+            <span className="text-xs font-mono" style={{ color: colors.cyan }}>
+              15m
+            </span>
           </div>
         </TimeSlice.Shortcut>
         <TimeSlice.Shortcut duration={{ hours: 1 }} asChild>
-          <div className="hover:bg-zinc-800 active:bg-zinc-800/80 focus:bg-zinc-800 p-2 rounded-sm text-zinc-300 cursor-pointer transition-colors duration-150 flex items-center justify-between">
-            <span>1 hour</span>
-            <span className="text-xs text-zinc-500">1h</span>
+          <div
+            className="p-2.5 rounded-md cursor-pointer transition-colors duration-100 flex items-center justify-between"
+            style={{ color: colors.text }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = `${colors.cyan}10`)
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = 'transparent')
+            }
+          >
+            <span className="text-sm">1 hour</span>
+            <span className="text-xs font-mono" style={{ color: colors.cyan }}>
+              1h
+            </span>
           </div>
         </TimeSlice.Shortcut>
         <TimeSlice.Shortcut duration={{ days: 1 }} asChild>
-          <div className="hover:bg-zinc-800 active:bg-zinc-800/80 focus:bg-zinc-800 p-2 rounded-sm text-zinc-300 cursor-pointer transition-colors duration-150 flex items-center justify-between">
-            <span>1 day</span>
-            <span className="text-xs text-zinc-500">1d</span>
+          <div
+            className="p-2.5 rounded-md cursor-pointer transition-colors duration-100 flex items-center justify-between"
+            style={{ color: colors.text }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = `${colors.cyan}10`)
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = 'transparent')
+            }
+          >
+            <span className="text-sm">1 day</span>
+            <span className="text-xs font-mono" style={{ color: colors.cyan }}>
+              1d
+            </span>
           </div>
         </TimeSlice.Shortcut>
         <TimeSlice.Shortcut duration={{ months: 1 }} asChild>
-          <div className="hover:bg-zinc-800 active:bg-zinc-800/80 focus:bg-zinc-800 p-2 rounded-sm text-zinc-300 cursor-pointer transition-colors duration-150 flex items-center justify-between">
-            <span>1 month</span>
-            <span className="text-xs text-zinc-500">1mo</span>
+          <div
+            className="p-2.5 rounded-md cursor-pointer transition-colors duration-100 flex items-center justify-between"
+            style={{ color: colors.text }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = `${colors.cyan}10`)
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = 'transparent')
+            }
+          >
+            <span className="text-sm">1 month</span>
+            <span className="text-xs font-mono" style={{ color: colors.cyan }}>
+              1mo
+            </span>
           </div>
         </TimeSlice.Shortcut>
       </TimeSlice.Portal>
