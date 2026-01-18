@@ -6,7 +6,7 @@ import {
   // type DateSegmentType, // Not used
   type Segment // Used in Tab suite helper
 } from '../use-segment-navigation'
-// import type { DateRange } from '../../use-time-slice-state'; // Not used
+// import type { DateRange } from '../../use-chrono-state'; // Not used
 import {
   createMockKeyboardEvent,
   getHook as getHookFromUtils

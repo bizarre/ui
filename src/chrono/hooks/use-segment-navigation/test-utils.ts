@@ -2,7 +2,7 @@ import { vi, type MockedFunction } from 'vitest'
 import type React from 'react'
 import { renderHook } from '@testing-library/react'
 import { useSegmentNavigation } from './use-segment-navigation'
-import type { DateRange } from '../use-time-slice-state'
+import type { DateRange } from '../use-chrono-state'
 import { act } from '@testing-library/react'
 import {
   buildSegments as buildSegmentsInternal,

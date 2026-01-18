@@ -1,6 +1,6 @@
 import React from 'react'
-import { TimeSlice } from '@lib'
-import type { DateRange } from '@lib/timeslice'
+import { Chrono } from '@lib'
+import type { DateRange } from '@lib/chrono'
 import { ChevronDown } from 'lucide-react'
 import {
   differenceInYears,
@@ -21,7 +21,7 @@ const colors = {
   cyan: '#00F0FF'
 }
 
-export default function TimeSliceExample() {
+export default function ChronoExample() {
   const [dateRange, setDateRange] = React.useState<DateRange>({
     startDate: new Date(Date.now() - 1000 * 60 * 15), // 15 minutes ago
     endDate: new Date()
@@ -57,12 +57,12 @@ export default function TimeSliceExample() {
   }, [dateRange])
 
   return (
-    <TimeSlice.Root
+    <Chrono.Root
       onDateRangeChange={onDateRangeChange}
       defaultDateRange={dateRange}
       onOpenChange={setIsOpen}
     >
-      <TimeSlice.Trigger asChild>
+      <Chrono.Trigger asChild>
         <div className="flex items-center space-x-2 w-full">
           <div
             className="flex-1 flex items-center rounded-lg px-4 py-3 transition-all duration-200 cursor-pointer group"
@@ -81,7 +81,7 @@ export default function TimeSliceExample() {
               >
                 {activeDurationLabel}
               </div>
-              <TimeSlice.Input
+              <Chrono.Input
                 className="bg-transparent text-sm w-full outline-none border-none cursor-pointer overflow-hidden truncate"
                 style={{ color: colors.textMuted }}
               />
@@ -94,9 +94,9 @@ export default function TimeSliceExample() {
             </div>
           </div>
         </div>
-      </TimeSlice.Trigger>
+      </Chrono.Trigger>
 
-      <TimeSlice.Portal
+      <Chrono.Portal
         className="relative rounded-lg mt-2 p-1.5 flex flex-col gap-0.5 text-sm shadow-2xl z-50 w-full transition-all duration-100 animate-in fade-in-0 zoom-in-95"
         style={{
           backgroundColor: colors.surface,
@@ -114,7 +114,7 @@ export default function TimeSliceExample() {
             Quick select
           </div>
         </div>
-        <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
+        <Chrono.Shortcut duration={{ minutes: 15 }} asChild>
           <div
             className="p-2.5 rounded-md cursor-pointer transition-colors duration-100 flex items-center justify-between"
             style={{ color: colors.text }}
@@ -130,8 +130,8 @@ export default function TimeSliceExample() {
               15m
             </span>
           </div>
-        </TimeSlice.Shortcut>
-        <TimeSlice.Shortcut duration={{ hours: 1 }} asChild>
+        </Chrono.Shortcut>
+        <Chrono.Shortcut duration={{ hours: 1 }} asChild>
           <div
             className="p-2.5 rounded-md cursor-pointer transition-colors duration-100 flex items-center justify-between"
             style={{ color: colors.text }}
@@ -147,8 +147,8 @@ export default function TimeSliceExample() {
               1h
             </span>
           </div>
-        </TimeSlice.Shortcut>
-        <TimeSlice.Shortcut duration={{ days: 1 }} asChild>
+        </Chrono.Shortcut>
+        <Chrono.Shortcut duration={{ days: 1 }} asChild>
           <div
             className="p-2.5 rounded-md cursor-pointer transition-colors duration-100 flex items-center justify-between"
             style={{ color: colors.text }}
@@ -164,8 +164,8 @@ export default function TimeSliceExample() {
               1d
             </span>
           </div>
-        </TimeSlice.Shortcut>
-        <TimeSlice.Shortcut duration={{ months: 1 }} asChild>
+        </Chrono.Shortcut>
+        <Chrono.Shortcut duration={{ months: 1 }} asChild>
           <div
             className="p-2.5 rounded-md cursor-pointer transition-colors duration-100 flex items-center justify-between"
             style={{ color: colors.text }}
@@ -181,8 +181,8 @@ export default function TimeSliceExample() {
               1mo
             </span>
           </div>
-        </TimeSlice.Shortcut>
-      </TimeSlice.Portal>
-    </TimeSlice.Root>
+        </Chrono.Shortcut>
+      </Chrono.Portal>
+    </Chrono.Root>
   )
 }

@@ -17,10 +17,10 @@
       "types": "./dist/index.d.ts",
       "require": "./dist/index/index.cjs.js"
     },
-    "./timeslice": {
-      "import": "./dist/timeslice/index.es.js",
-      "types": "./dist/timeslice.d.ts",
-      "require": "./dist/timeslice/index.cjs.js"
+    "./chrono": {
+      "import": "./dist/chrono/index.es.js",
+      "types": "./dist/chrono.d.ts",
+      "require": "./dist/chrono/index.cjs.js"
     },
     "./inlay": {
       "import": "./dist/inlay/index.es.js",
@@ -30,8 +30,8 @@
   },
   "typesVersions": {
     "*": {
-      "timeslice": [
-        "./dist/timeslice.d.ts"
+      "chrono": [
+        "./dist/chrono.d.ts"
       ]
     }
   },

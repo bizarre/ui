@@ -5,7 +5,7 @@ import {
   buildSegments
   // type Segment // Not used
 } from '../use-segment-navigation'
-// import type { DateRange } from '../../use-time-slice-state' // Not used
+// import type { DateRange } from '../../use-chrono-state' // Not used
 import {
   // createMockInputRef,
   getHook as getHookFromUtils

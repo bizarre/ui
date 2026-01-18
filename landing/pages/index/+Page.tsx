@@ -1139,7 +1139,7 @@ function InlayDemo() {
 function ChronoDemo() {
   return (
     <ClientOnly
-      load={() => import('../../components/time-slice-example')}
+      load={() => import('../../components/chrono-example')}
       fallback={
         <div
           className="rounded-lg px-4 py-3"

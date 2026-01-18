@@ -1,57 +1,52 @@
 import type { Meta } from '@storybook/react'
 
-import { TimeSlice } from '..'
-import type { TimeSliceProps } from '.'
+import { Chrono } from '..'
+import type { ChronoProps } from '.'
 import * as React from 'react'
 
-const meta: Meta<typeof TimeSlice> = {
-  component: TimeSlice.Root
+const meta: Meta<typeof Chrono> = {
+  component: Chrono.Root
 }
 
 export default meta
 
 export const Basic = () => {
-  const [dateRange, setDateRange] = React.useState<TimeSliceProps['dateRange']>(
-    {
-      startDate: undefined,
-      endDate: undefined
-    }
-  )
+  const [dateRange, setDateRange] = React.useState<ChronoProps['dateRange']>({
+    startDate: undefined,
+    endDate: undefined
+  })
 
-  const onDateRangeChange = (dateRange: TimeSliceProps['dateRange']) => {
+  const onDateRangeChange = (dateRange: ChronoProps['dateRange']) => {
     setDateRange(dateRange)
   }
 
   return (
     <>
-      <TimeSlice.Root onDateRangeChange={onDateRangeChange}>
-        <TimeSlice.Input style={{ border: '1px solid black', width: '100%' }} />
-        <TimeSlice.Portal
+      <Chrono.Root onDateRangeChange={onDateRangeChange}>
+        <Chrono.Input style={{ border: '1px solid black', width: '100%' }} />
+        <Chrono.Portal
           style={{ border: '1px solid black', backgroundColor: 'white' }}
         >
-          <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
+          <Chrono.Shortcut duration={{ minutes: 15 }} asChild>
             <div className="focus:bg-gray-100">15 minutes</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut
+          </Chrono.Shortcut>
+          <Chrono.Shortcut
             className="focus:bg-gray-100"
             duration={{ hours: 1 }}
           >
             <div>1 hour</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut
-            className="focus:bg-gray-100"
-            duration={{ days: 1 }}
-          >
+          </Chrono.Shortcut>
+          <Chrono.Shortcut className="focus:bg-gray-100" duration={{ days: 1 }}>
             <div>1 day</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut
+          </Chrono.Shortcut>
+          <Chrono.Shortcut
             className="focus:bg-gray-100"
             duration={{ years: 1 }}
           >
             <div>1 year</div>
-          </TimeSlice.Shortcut>
-        </TimeSlice.Portal>
-      </TimeSlice.Root>
+          </Chrono.Shortcut>
+        </Chrono.Portal>
+      </Chrono.Root>
 
       <pre>{JSON.stringify(dateRange, null, 2)}</pre>
     </>
@@ -59,47 +54,42 @@ export const Basic = () => {
 }
 
 export const Absolute = () => {
-  const [dateRange, setDateRange] = React.useState<TimeSliceProps['dateRange']>(
-    {
-      startDate: undefined,
-      endDate: undefined
-    }
-  )
+  const [dateRange, setDateRange] = React.useState<ChronoProps['dateRange']>({
+    startDate: undefined,
+    endDate: undefined
+  })
 
-  const onDateRangeChange = (dateRange: TimeSliceProps['dateRange']) => {
+  const onDateRangeChange = (dateRange: ChronoProps['dateRange']) => {
     setDateRange(dateRange)
   }
 
   return (
     <>
-      <TimeSlice.Root onDateRangeChange={onDateRangeChange} formatInput={null}>
-        <TimeSlice.Input style={{ border: '1px solid black', width: '100%' }} />
-        <TimeSlice.Portal
+      <Chrono.Root onDateRangeChange={onDateRangeChange} formatInput={null}>
+        <Chrono.Input style={{ border: '1px solid black', width: '100%' }} />
+        <Chrono.Portal
           style={{ border: '1px solid black', backgroundColor: 'white' }}
         >
-          <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
+          <Chrono.Shortcut duration={{ minutes: 15 }} asChild>
             <div className="focus:bg-gray-100">15 minutes</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut
+          </Chrono.Shortcut>
+          <Chrono.Shortcut
             className="focus:bg-gray-100"
             duration={{ hours: 1 }}
           >
             <div>1 hour</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut
-            className="focus:bg-gray-100"
-            duration={{ days: 1 }}
-          >
+          </Chrono.Shortcut>
+          <Chrono.Shortcut className="focus:bg-gray-100" duration={{ days: 1 }}>
             <div>1 day</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut
+          </Chrono.Shortcut>
+          <Chrono.Shortcut
             className="focus:bg-gray-100"
             duration={{ years: 1 }}
           >
             <div>1 year</div>
-          </TimeSlice.Shortcut>
-        </TimeSlice.Portal>
-      </TimeSlice.Root>
+          </Chrono.Shortcut>
+        </Chrono.Portal>
+      </Chrono.Root>
 
       <pre>{JSON.stringify(dateRange, null, 2)}</pre>
     </>
@@ -107,31 +97,29 @@ export const Absolute = () => {
 }
 
 export const WithFutureShortcuts = () => {
-  const [dateRange, setDateRange] = React.useState<TimeSliceProps['dateRange']>(
-    {
-      startDate: undefined,
-      endDate: undefined
-    }
-  )
+  const [dateRange, setDateRange] = React.useState<ChronoProps['dateRange']>({
+    startDate: undefined,
+    endDate: undefined
+  })
 
   return (
     <>
-      <TimeSlice.Root onDateRangeChange={setDateRange} dateRange={dateRange}>
-        <TimeSlice.Input style={{ border: '1px solid black', width: '100%' }} />
-        <TimeSlice.Portal
+      <Chrono.Root onDateRangeChange={setDateRange} dateRange={dateRange}>
+        <Chrono.Input style={{ border: '1px solid black', width: '100%' }} />
+        <Chrono.Portal
           style={{ border: '1px solid black', backgroundColor: 'white' }}
         >
-          <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
+          <Chrono.Shortcut duration={{ minutes: 15 }} asChild>
             <div className="focus:bg-gray-100">15 minutes</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut
+          </Chrono.Shortcut>
+          <Chrono.Shortcut
             className="focus:bg-gray-100"
             duration={{ hours: -1 }}
           >
             <div>Next hour</div>
-          </TimeSlice.Shortcut>
-        </TimeSlice.Portal>
-      </TimeSlice.Root>
+          </Chrono.Shortcut>
+        </Chrono.Portal>
+      </Chrono.Root>
 
       <pre>{JSON.stringify(dateRange, null, 2)}</pre>
     </>
@@ -139,17 +127,15 @@ export const WithFutureShortcuts = () => {
 }
 
 export const Controlled = () => {
-  const [dateRange, setDateRange] = React.useState<TimeSliceProps['dateRange']>(
-    {
-      startDate: undefined,
-      endDate: undefined
-    }
-  )
+  const [dateRange, setDateRange] = React.useState<ChronoProps['dateRange']>({
+    startDate: undefined,
+    endDate: undefined
+  })
 
   return (
     <>
       <h1>Prevents future dates via controlled state</h1>
-      <TimeSlice.Root
+      <Chrono.Root
         onDateRangeChange={({ startDate, endDate }) => {
           // prevent future dates
           if (startDate && endDate && endDate > new Date()) {
@@ -160,33 +146,30 @@ export const Controlled = () => {
         }}
         dateRange={dateRange}
       >
-        <TimeSlice.Input style={{ border: '1px solid black', width: '100%' }} />
-        <TimeSlice.Portal
+        <Chrono.Input style={{ border: '1px solid black', width: '100%' }} />
+        <Chrono.Portal
           style={{ border: '1px solid black', backgroundColor: 'white' }}
         >
-          <TimeSlice.Shortcut duration={{ minutes: 15 }} asChild>
+          <Chrono.Shortcut duration={{ minutes: 15 }} asChild>
             <div className="focus:bg-gray-100">15 minutes</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut
+          </Chrono.Shortcut>
+          <Chrono.Shortcut
             className="focus:bg-gray-100"
             duration={{ hours: 1 }}
           >
             <div>1 hour</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut
-            className="focus:bg-gray-100"
-            duration={{ days: 1 }}
-          >
+          </Chrono.Shortcut>
+          <Chrono.Shortcut className="focus:bg-gray-100" duration={{ days: 1 }}>
             <div>1 day</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut
+          </Chrono.Shortcut>
+          <Chrono.Shortcut
             className="focus:bg-gray-100"
             duration={{ years: 1 }}
           >
             <div>1 year</div>
-          </TimeSlice.Shortcut>
-        </TimeSlice.Portal>
-      </TimeSlice.Root>
+          </Chrono.Shortcut>
+        </Chrono.Portal>
+      </Chrono.Root>
 
       <pre>{JSON.stringify(dateRange, null, 2)}</pre>
     </>
@@ -194,14 +177,12 @@ export const Controlled = () => {
 }
 
 export const DataDog = () => {
-  const [dateRange, setDateRange] = React.useState<TimeSliceProps['dateRange']>(
-    {
-      startDate: new Date(Date.now() - 1000 * 60 * 5),
-      endDate: new Date()
-    }
-  )
+  const [dateRange, setDateRange] = React.useState<ChronoProps['dateRange']>({
+    startDate: new Date(Date.now() - 1000 * 60 * 5),
+    endDate: new Date()
+  })
 
-  const onDateRangeChange = (dateRange: TimeSliceProps['dateRange']) => {
+  const onDateRangeChange = (dateRange: ChronoProps['dateRange']) => {
     setDateRange(dateRange)
   }
 
@@ -236,11 +217,11 @@ export const DataDog = () => {
 
   return (
     <div className="inline-block">
-      <TimeSlice.Root
+      <Chrono.Root
         onDateRangeChange={onDateRangeChange}
         defaultDateRange={dateRange}
       >
-        <TimeSlice.Trigger asChild>
+        <Chrono.Trigger asChild>
           <div className="group flex relative border-[1.5px] border-gray-300 h-[28px] items-center p-1 cursor-pointer w-[340px] focus-within:border-blue-800/50 rounded-t-sm not-focus-within:rounded-sm not-focus-within:hover:border-gray-400 focus-within:bg-blue-50 focus-within:text-blue-900">
             <span className="text-[9px] text-gray-600 absolute left-[36px] ml-3 bg-white transition-all duration-150 -top-2.5 px-1 group-focus-within:text-[8px] group-focus-within:text-blue-900  font-mono">
               UTC-04:00
@@ -252,24 +233,24 @@ export const DataDog = () => {
               </div>
             </div>
 
-            <TimeSlice.Input className="border-none outline-none text-sm cursor-pointer w-full bg-transparent" />
+            <Chrono.Input className="border-none outline-none text-sm cursor-pointer w-full bg-transparent" />
           </div>
-        </TimeSlice.Trigger>
-        <TimeSlice.Portal className="w-full rounded-b-sm border-[1.5px] border-gray-300 border-t-0">
-          <TimeSlice.Shortcut duration={{ minutes: 15 }}>
+        </Chrono.Trigger>
+        <Chrono.Portal className="w-full rounded-b-sm border-[1.5px] border-gray-300 border-t-0">
+          <Chrono.Shortcut duration={{ minutes: 15 }}>
             <div>15 minutes</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut duration={{ hours: 1 }}>
+          </Chrono.Shortcut>
+          <Chrono.Shortcut duration={{ hours: 1 }}>
             <div>1 hour</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut duration={{ days: 1 }}>
+          </Chrono.Shortcut>
+          <Chrono.Shortcut duration={{ days: 1 }}>
             <div>1 day</div>
-          </TimeSlice.Shortcut>
-          <TimeSlice.Shortcut duration={{ years: 1 }}>
+          </Chrono.Shortcut>
+          <Chrono.Shortcut duration={{ years: 1 }}>
             <div>1 year</div>
-          </TimeSlice.Shortcut>
-        </TimeSlice.Portal>
-      </TimeSlice.Root>
+          </Chrono.Shortcut>
+        </Chrono.Portal>
+      </Chrono.Root>
     </div>
   )
 }

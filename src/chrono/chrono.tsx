@@ -6,7 +6,7 @@ import { DismissableLayer } from '@radix-ui/react-dismissable-layer'
 import { Slot } from '@radix-ui/react-slot'
 import { sub, add, Duration } from 'date-fns'
 import React, { useCallback, useMemo, useId, useState, useEffect } from 'react'
-import { useTimeSliceState, type DateRange } from './hooks/use-time-slice-state'
+import { useChronoState, type DateRange } from './hooks/use-chrono-state'
 import {
   useSegmentNavigation,
   buildSegments
@@ -16,12 +16,12 @@ import { formatTimeRange } from './utils/time-range'
 
 export type TimeZone = keyof typeof Timezone
 
-const COMPONENT_NAME = 'TimeSlice'
+const COMPONENT_NAME = 'Chrono'
 
 type ScopedProps<P> = P & { __scope?: Scope }
-const [createTimeSliceContext] = createContextScope(COMPONENT_NAME)
+const [createChronoContext] = createContextScope(COMPONENT_NAME)
 
-type TimeSliceContextValue = {
+type ChronoContextValue = {
   timeZone: TimeZone
   inputRef: React.RefObject<HTMLInputElement | null>
   open: boolean
@@ -42,10 +42,10 @@ type TimeSliceContextValue = {
   portalId?: string
 }
 
-const [TimeSliceProvider, useTimeSliceContext] =
-  createTimeSliceContext<TimeSliceContextValue>(COMPONENT_NAME)
+const [ChronoProvider, useChronoContext] =
+  createChronoContext<ChronoContextValue>(COMPONENT_NAME)
 
-type TimeSliceProps = ScopedProps<{
+type ChronoProps = ScopedProps<{
   children: React.ReactNode
   timeZone?: TimeZone
   open?: boolean
@@ -65,7 +65,7 @@ type TimeSliceProps = ScopedProps<{
   onDateRangeConfirm?: (range: DateRange) => void
 }>
 
-const TimeSlice: React.FC<TimeSliceProps> = ({
+const Chrono: React.FC<ChronoProps> = ({
   children,
   __scope,
   formatInput: formatInputProp,
@@ -80,7 +80,7 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
     setOpen,
     dateRange,
     setDateRange: setDateRangeInternal
-  } = useTimeSliceState(stateProps)
+  } = useChronoState(stateProps)
 
   const calculateIsRelative = useCallback((range: DateRange): boolean => {
     let shouldBeRelative = false
@@ -213,7 +213,7 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
 
   return (
     <DismissableLayer onEscapeKeyDown={close} onPointerDownOutside={close}>
-      <TimeSliceProvider
+      <ChronoProvider
         scope={__scope}
         timeZone={timeZone as TimeZone}
         inputRef={inputRef}
@@ -230,39 +230,38 @@ const TimeSlice: React.FC<TimeSliceProps> = ({
         portalId={portalId}
       >
         <div style={{ position: 'relative' }}>{children}</div>
-      </TimeSliceProvider>
+      </ChronoProvider>
     </DismissableLayer>
   )
 }
 
-type TimeSliceTriggerProps = ScopedProps<{
+type ChronoTriggerProps = ScopedProps<{
   children: React.ReactNode
   asChild?: boolean
 }> &
   Omit<React.HTMLAttributes<HTMLDivElement>, 'onClick'>
 
-const TimeSliceTrigger = React.forwardRef<
-  HTMLDivElement,
-  TimeSliceTriggerProps
->(({ asChild, children, __scope, ...props }, forwardedRef) => {
-  const { inputRef } = useTimeSliceContext(COMPONENT_NAME, __scope)
+const ChronoTrigger = React.forwardRef<HTMLDivElement, ChronoTriggerProps>(
+  ({ asChild, children, __scope, ...props }, forwardedRef) => {
+    const { inputRef } = useChronoContext(COMPONENT_NAME, __scope)
 
-  const onClick = useCallback(() => {
-    if (inputRef.current) {
-      inputRef.current.focus()
-    }
-  }, [inputRef])
+    const onClick = useCallback(() => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+      }
+    }, [inputRef])
 
-  const Comp = asChild ? Slot : 'div'
+    const Comp = asChild ? Slot : 'div'
 
-  return (
-    <Comp {...props} onClick={onClick} ref={forwardedRef}>
-      {children}
-    </Comp>
-  )
-})
+    return (
+      <Comp {...props} onClick={onClick} ref={forwardedRef}>
+        {children}
+      </Comp>
+    )
+  }
+)
 
-type TimeSliceInputProps = ScopedProps<{
+type ChronoInputProps = ScopedProps<{
   children?: React.ReactNode
   asChild?: boolean
 }> &
@@ -271,9 +270,9 @@ type TimeSliceInputProps = ScopedProps<{
     'onChange' | 'onKeyDown' | 'onFocus' | 'onClick'
   >
 
-const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
+const ChronoInput = React.forwardRef<HTMLInputElement, ChronoInputProps>(
   ({ asChild, children, __scope, ...props }, forwardedRef) => {
-    const context = useTimeSliceContext(COMPONENT_NAME, __scope)
+    const context = useChronoContext(COMPONENT_NAME, __scope)
     const internalInputRef = React.useRef<HTMLInputElement>(null)
     const composedInputRef = composeRefs(
       forwardedRef,
@@ -394,16 +393,16 @@ const TimeSliceInput = React.forwardRef<HTMLInputElement, TimeSliceInputProps>(
   }
 )
 
-type TimeSlicePortalProps = ScopedProps<{
+type ChronoPortalProps = ScopedProps<{
   children: React.ReactNode
   asChild?: boolean
   ariaLabel?: string
 }> &
   React.HTMLAttributes<HTMLDivElement>
 
-const TimeSlicePortal = React.forwardRef<HTMLDivElement, TimeSlicePortalProps>(
+const ChronoPortal = React.forwardRef<HTMLDivElement, ChronoPortalProps>(
   ({ asChild, children, __scope, ariaLabel, ...props }, forwardedRef) => {
-    const context = useTimeSliceContext(COMPONENT_NAME, __scope)
+    const context = useChronoContext(COMPONENT_NAME, __scope)
 
     const handleKeyDownInPortal = useCallback(
       (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -488,7 +487,7 @@ const TimeSlicePortal = React.forwardRef<HTMLDivElement, TimeSlicePortalProps>(
   }
 )
 
-type TimeSliceShortcutProps = ScopedProps<{
+type ChronoShortcutProps = ScopedProps<{
   children: React.ReactNode
   duration: Partial<{
     years: number
@@ -502,73 +501,72 @@ type TimeSliceShortcutProps = ScopedProps<{
 }> &
   Omit<React.HTMLAttributes<HTMLDivElement>, 'onClick'>
 
-const TimeSliceShortcut = React.forwardRef<
-  HTMLDivElement,
-  TimeSliceShortcutProps
->(({ asChild, children, __scope, duration, ...props }, forwardedRef) => {
-  const { setDateRange, setInternalIsRelative, setOpen, inputRef } =
-    useTimeSliceContext(COMPONENT_NAME, __scope)
+const ChronoShortcut = React.forwardRef<HTMLDivElement, ChronoShortcutProps>(
+  ({ asChild, children, __scope, duration, ...props }, forwardedRef) => {
+    const { setDateRange, setInternalIsRelative, setOpen, inputRef } =
+      useChronoContext(COMPONENT_NAME, __scope)
 
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      e.preventDefault()
-      const now = new Date()
-      let finalStartDate: Date
-      let finalEndDate: Date
+    const handleClick = useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        e.preventDefault()
+        const now = new Date()
+        let finalStartDate: Date
+        let finalEndDate: Date
 
-      const isFutureIntent = Object.values(duration).some(
-        (val) => val !== undefined && val < 0
-      )
+        const isFutureIntent = Object.values(duration).some(
+          (val) => val !== undefined && val < 0
+        )
 
-      const normalizedDuration: Duration = {}
-      ;(Object.keys(duration) as Array<keyof typeof duration>).forEach(
-        (key) => {
-          const value = duration[key]
-          if (value !== undefined) {
-            normalizedDuration[key] = Math.abs(value)
+        const normalizedDuration: Duration = {}
+        ;(Object.keys(duration) as Array<keyof typeof duration>).forEach(
+          (key) => {
+            const value = duration[key]
+            if (value !== undefined) {
+              normalizedDuration[key] = Math.abs(value)
+            }
           }
+        )
+
+        if (isFutureIntent) {
+          finalStartDate = now
+          finalEndDate = add(now, normalizedDuration)
+        } else {
+          finalStartDate = sub(now, normalizedDuration)
+          finalEndDate = now
         }
-      )
 
-      if (isFutureIntent) {
-        finalStartDate = now
-        finalEndDate = add(now, normalizedDuration)
-      } else {
-        finalStartDate = sub(now, normalizedDuration)
-        finalEndDate = now
-      }
+        setInternalIsRelative(true)
+        setDateRange({ startDate: finalStartDate, endDate: finalEndDate })
+        setOpen(false)
+        if (inputRef.current) {
+          inputRef.current.blur()
+        }
+      },
+      [setDateRange, setInternalIsRelative, setOpen, duration, inputRef]
+    )
 
-      setInternalIsRelative(true)
-      setDateRange({ startDate: finalStartDate, endDate: finalEndDate })
-      setOpen(false)
-      if (inputRef.current) {
-        inputRef.current.blur()
-      }
-    },
-    [setDateRange, setInternalIsRelative, setOpen, duration, inputRef]
-  )
+    const optionPropsAria = {
+      ...props,
+      role: 'option',
+      'aria-selected': false,
+      ref: forwardedRef,
+      onClick: handleClick,
+      tabIndex: -1,
+      'data-shortcut-item': 'true',
+      style: { cursor: 'pointer', ...props.style }
+    }
 
-  const optionPropsAria = {
-    ...props,
-    role: 'option',
-    'aria-selected': false,
-    ref: forwardedRef,
-    onClick: handleClick,
-    tabIndex: -1,
-    'data-shortcut-item': 'true',
-    style: { cursor: 'pointer', ...props.style }
+    const Comp = asChild ? Slot : 'div'
+
+    return <Comp {...optionPropsAria}>{children}</Comp>
   }
+)
 
-  const Comp = asChild ? Slot : 'div'
-
-  return <Comp {...optionPropsAria}>{children}</Comp>
-})
-
-const Root = TimeSlice
-const Trigger = TimeSliceTrigger
-const Input = TimeSliceInput
-const Portal = TimeSlicePortal
-const Shortcut = TimeSliceShortcut
+const Root = Chrono
+const Trigger = ChronoTrigger
+const Input = ChronoInput
+const Portal = ChronoPortal
+const Shortcut = ChronoShortcut
 
 export {
   Root,
@@ -576,9 +574,9 @@ export {
   Input,
   Portal,
   Shortcut,
-  type TimeSliceProps,
-  type TimeSliceInputProps,
-  type TimeSlicePortalProps,
-  type TimeSliceShortcutProps,
+  type ChronoProps,
+  type ChronoInputProps,
+  type ChronoPortalProps,
+  type ChronoShortcutProps,
   type DateRange
 }

@@ -1,6 +1,6 @@
 import * as chrono from 'chrono-node'
 import { fromUnixTime, isValid } from 'date-fns'
-import type { DateRange } from '../hooks/use-time-slice-state'
+import type { DateRange } from '../hooks/use-chrono-state'
 
 export function parseDateInput(value: string): DateRange {
   let parsed = chrono.parse(value, new Date())
