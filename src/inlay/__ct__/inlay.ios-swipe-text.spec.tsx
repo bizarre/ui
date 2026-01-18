@@ -735,3 +735,613 @@ test.describe('iOS Safari text suggestion', () => {
     expect(result.finalText).toBe('hello')
   })
 })
+
+/**
+ * iOS Swipe-Text Trailing Space Bug
+ *
+ * THE BUG (from real iOS device testing):
+ * When user swipe-types a word, iOS sends:
+ * 1. insertText with the swiped word (e.g., "hello") - multi-char, we track it
+ * 2. insertText with a single space " " - this CLEARS our tracking!
+ * 3. User presses backspace - tracking is null, so we only delete one char
+ *
+ * EXPECTED: Backspace after swipe+space should delete the swiped word
+ * ACTUAL BUG: Only deletes the trailing space because tracking was cleared
+ *
+ * THE FIX: When a single space follows a multi-char insert within a short
+ * time window, extend the tracking to include the space instead of clearing it.
+ */
+test.describe('iOS swipe-text trailing space', () => {
+  /**
+   * iOS sends a trailing space after swipe-typing, which clears our tracking.
+   * Backspace should still delete the whole swiped word.
+   */
+  test('backspace after swipe + trailing space should delete swiped word', async ({
+    mount,
+    page
+  }) => {
+    await mount(
+      <Inlay.Root defaultValue="" data-testid="root">
+        {null}
+      </Inlay.Root>
+    )
+
+    const ed = page.getByRole('textbox')
+    await ed.click()
+
+    const result = await page.evaluate(async () => {
+      const editor = document.querySelector('[role="textbox"]') as HTMLElement
+
+      // Step 1: Simulate swipe-typing "hello" (multi-char insert)
+      const swipeEvent = new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: 'hello',
+        bubbles: true,
+        cancelable: true
+      })
+
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0)
+        ;(swipeEvent as any).getTargetRanges = () => [
+          {
+            startContainer: range.startContainer,
+            startOffset: range.startOffset,
+            endContainer: range.endContainer,
+            endOffset: range.endOffset,
+            collapsed: true
+          }
+        ]
+      } else {
+        ;(swipeEvent as any).getTargetRanges = () => []
+      }
+
+      editor.dispatchEvent(swipeEvent)
+      await new Promise((r) => setTimeout(r, 30))
+
+      const afterSwipe = editor.textContent?.replace(/\u200B/g, '')
+
+      // Step 2: iOS sends a trailing space as a SEPARATE single-char event
+      // This is the bug trigger - it clears our multi-char tracking!
+      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+      let textNode: Text | null = null
+      while (walker.nextNode()) {
+        const node = walker.currentNode as Text
+        if (node.textContent && node.textContent.length > 0) {
+          textNode = node
+          break
+        }
+      }
+
+      if (!textNode) {
+        return { error: 'No text node found after swipe', afterSwipe }
+      }
+
+      const spaceEvent = new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: ' ', // Single space - this triggers the bug!
+        bubbles: true,
+        cancelable: true
+      })
+
+      const textLen = textNode.textContent?.length || 0
+      ;(spaceEvent as any).getTargetRanges = () => [
+        {
+          startContainer: textNode,
+          startOffset: textLen,
+          endContainer: textNode,
+          endOffset: textLen,
+          collapsed: true
+        }
+      ]
+
+      editor.dispatchEvent(spaceEvent)
+      await new Promise((r) => setTimeout(r, 30))
+
+      const afterSpace = editor.textContent?.replace(/\u200B/g, '')
+
+      // Step 3: Press backspace - should delete the whole swiped word
+      // Find the text node again after React re-render
+      const walker2 = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+      let textNode2: Text | null = null
+      while (walker2.nextNode()) {
+        const node = walker2.currentNode as Text
+        if (node.textContent && node.textContent.length > 0) {
+          textNode2 = node
+          break
+        }
+      }
+
+      if (!textNode2) {
+        return {
+          error: 'No text node found after space',
+          afterSwipe,
+          afterSpace
+        }
+      }
+
+      const deleteEvent = new InputEvent('beforeinput', {
+        inputType: 'deleteContentBackward',
+        bubbles: true,
+        cancelable: true
+      })
+
+      const textLen2 = textNode2.textContent?.length || 0
+      ;(deleteEvent as any).getTargetRanges = () => [
+        {
+          startContainer: textNode2,
+          startOffset: textLen2 - 1,
+          endContainer: textNode2,
+          endOffset: textLen2,
+          collapsed: false
+        }
+      ]
+
+      editor.dispatchEvent(deleteEvent)
+      await new Promise((r) => setTimeout(r, 50))
+
+      return {
+        afterSwipe,
+        afterSpace,
+        finalText: editor.textContent?.replace(/\u200B/g, ''),
+        // Check what was deleted
+        deletedCorrectly:
+          editor.textContent?.replace(/\u200B/g, '') === '' ||
+          editor.textContent?.replace(/\u200B/g, '') === ' '
+      }
+    })
+
+    console.log('Trailing space test result:', JSON.stringify(result, null, 2))
+
+    // Verify setup worked
+    expect(result.error).toBeUndefined()
+    expect(result.afterSwipe).toBe('hello')
+    expect(result.afterSpace).toBe('hello ')
+
+    // EXPECTED: Entire swiped word deleted (leaving empty or just the space)
+    // ACTUAL BUG: Only one char deleted because tracking was cleared by space
+    // We expect the result to be empty string (whole word + space deleted)
+    // or just a space (word deleted, space preserved)
+    expect(result.finalText).toMatch(/^[ ]?$/) // Empty or single space
+  })
+
+  /**
+   * Multiple swipes in sequence - each swipe's trailing space should not
+   * break backspace behavior for the most recent swipe.
+   */
+  test('backspace after multiple swipes should delete most recent word', async ({
+    mount,
+    page
+  }) => {
+    await mount(
+      <Inlay.Root defaultValue="" data-testid="root">
+        {null}
+      </Inlay.Root>
+    )
+
+    const ed = page.getByRole('textbox')
+    await ed.click()
+
+    const result = await page.evaluate(async () => {
+      const editor = document.querySelector('[role="textbox"]') as HTMLElement
+
+      const dispatchInsert = async (text: string) => {
+        const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+        let textNode: Text | null = null
+        let textLen = 0
+        while (walker.nextNode()) {
+          const node = walker.currentNode as Text
+          if (node.textContent) {
+            textNode = node
+            textLen = node.textContent.length
+          }
+        }
+
+        const event = new InputEvent('beforeinput', {
+          inputType: 'insertText',
+          data: text,
+          bubbles: true,
+          cancelable: true
+        })
+
+        if (textNode) {
+          ;(event as any).getTargetRanges = () => [
+            {
+              startContainer: textNode,
+              startOffset: textLen,
+              endContainer: textNode,
+              endOffset: textLen,
+              collapsed: true
+            }
+          ]
+        } else {
+          const sel = window.getSelection()
+          if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0)
+            ;(event as any).getTargetRanges = () => [
+              {
+                startContainer: range.startContainer,
+                startOffset: range.startOffset,
+                endContainer: range.endContainer,
+                endOffset: range.endOffset,
+                collapsed: true
+              }
+            ]
+          } else {
+            ;(event as any).getTargetRanges = () => []
+          }
+        }
+
+        editor.dispatchEvent(event)
+        await new Promise((r) => setTimeout(r, 30))
+      }
+
+      // Swipe "hello" + trailing space
+      await dispatchInsert('hello')
+      await dispatchInsert(' ')
+
+      // Swipe "world" + trailing space
+      await dispatchInsert('world')
+      await dispatchInsert(' ')
+
+      const beforeDelete = editor.textContent?.replace(/\u200B/g, '')
+
+      // Press backspace
+      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+      let textNode: Text | null = null
+      while (walker.nextNode()) {
+        const node = walker.currentNode as Text
+        if (node.textContent && node.textContent.length > 0) {
+          textNode = node
+          break
+        }
+      }
+
+      if (!textNode) {
+        return { error: 'No text node', beforeDelete }
+      }
+
+      const deleteEvent = new InputEvent('beforeinput', {
+        inputType: 'deleteContentBackward',
+        bubbles: true,
+        cancelable: true
+      })
+
+      const textLen = textNode.textContent?.length || 0
+      ;(deleteEvent as any).getTargetRanges = () => [
+        {
+          startContainer: textNode,
+          startOffset: textLen - 1,
+          endContainer: textNode,
+          endOffset: textLen,
+          collapsed: false
+        }
+      ]
+
+      editor.dispatchEvent(deleteEvent)
+      await new Promise((r) => setTimeout(r, 50))
+
+      return {
+        beforeDelete,
+        finalText: editor.textContent?.replace(/\u200B/g, '')
+      }
+    })
+
+    console.log('Multiple swipes test result:', JSON.stringify(result, null, 2))
+
+    expect(result.error).toBeUndefined()
+    expect(result.beforeDelete).toBe('hello world ')
+
+    // EXPECTED: "world " deleted, leaving "hello " or "hello"
+    // ACTUAL BUG: Only one char deleted, leaving "hello world"
+    expect(result.finalText).toMatch(/^hello ?$/)
+  })
+})
+
+/**
+ * iOS Swipe-Text Double Space Prevention
+ *
+ * THE BUG (from real iOS device testing):
+ * When user swipes "hello", iOS auto-adds a trailing space → "hello "
+ * When user then swipes "world", iOS sends " world" (with leading space)
+ * Result: "hello  world" with DOUBLE SPACE
+ *
+ * EXPECTED: "hello world" (single space between words)
+ * ACTUAL BUG: "hello  world" (double space)
+ *
+ * THE FIX: When inserting a multi-char string that starts with a space,
+ * check if the character before is already a space. If so, strip the
+ * leading space from the insert to avoid double-spacing.
+ */
+test.describe('iOS swipe-text double space prevention', () => {
+  /**
+   * When swiping " world" after "hello " (which already has trailing space),
+   * the leading space should be stripped to avoid double-spacing.
+   */
+  test('swipe after trailing space should not create double space', async ({
+    mount,
+    page
+  }) => {
+    await mount(
+      <Inlay.Root defaultValue="" data-testid="root">
+        {null}
+      </Inlay.Root>
+    )
+
+    const ed = page.getByRole('textbox')
+    await ed.click()
+
+    const result = await page.evaluate(async () => {
+      const editor = document.querySelector('[role="textbox"]') as HTMLElement
+
+      const dispatchInsert = async (text: string) => {
+        const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
+        let textNode: Text | null = null
+        let textLen = 0
+        while (walker.nextNode()) {
+          const node = walker.currentNode as Text
+          if (node.textContent) {
+            textNode = node
+            textLen = node.textContent.length
+          }
+        }
+
+        const event = new InputEvent('beforeinput', {
+          inputType: 'insertText',
+          data: text,
+          bubbles: true,
+          cancelable: true
+        })
+
+        if (textNode) {
+          ;(event as any).getTargetRanges = () => [
+            {
+              startContainer: textNode,
+              startOffset: textLen,
+              endContainer: textNode,
+              endOffset: textLen,
+              collapsed: true
+            }
+          ]
+        } else {
+          const sel = window.getSelection()
+          if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0)
+            ;(event as any).getTargetRanges = () => [
+              {
+                startContainer: range.startContainer,
+                startOffset: range.startOffset,
+                endContainer: range.endContainer,
+                endOffset: range.endOffset,
+                collapsed: true
+              }
+            ]
+          } else {
+            ;(event as any).getTargetRanges = () => []
+          }
+        }
+
+        editor.dispatchEvent(event)
+        await new Promise((r) => setTimeout(r, 30))
+      }
+
+      // Step 1: Swipe "hello"
+      await dispatchInsert('hello')
+      const afterHello = editor.textContent?.replace(/\u200B/g, '')
+
+      // Step 2: iOS adds trailing space
+      await dispatchInsert(' ')
+      const afterSpace = editor.textContent?.replace(/\u200B/g, '')
+
+      // Step 3: Swipe " world" (iOS sends with leading space)
+      await dispatchInsert(' world')
+      const afterWorld = editor.textContent?.replace(/\u200B/g, '')
+
+      // Count spaces between hello and world
+      const match = afterWorld?.match(/hello( +)world/)
+      const spaceCount = match ? match[1].length : 0
+
+      return {
+        afterHello,
+        afterSpace,
+        afterWorld,
+        spaceCount,
+        hasDoubleSpace: afterWorld?.includes('  ')
+      }
+    })
+
+    console.log('Double space test result:', JSON.stringify(result, null, 2))
+
+    expect(result.afterHello).toBe('hello')
+    expect(result.afterSpace).toBe('hello ')
+
+    // EXPECTED: "hello world" (single space)
+    // ACTUAL BUG: "hello  world" (double space)
+    expect(result.afterWorld).toBe('hello world')
+    expect(result.spaceCount).toBe(1)
+    expect(result.hasDoubleSpace).toBe(false)
+  })
+})
+
+/**
+ * iOS swipe after newline tests
+ *
+ * When swiping on a new line (after Enter), iOS often adds a leading space.
+ * This space should be stripped since it's at the start of a line.
+ */
+test.describe('iOS swipe-text after newline', () => {
+  /**
+   * When swiping "world" after "hello\n", the leading space should be stripped.
+   * iOS sends swipe data with leading space even at start of line.
+   */
+  test('swipe after newline should not have leading space', async ({
+    mount,
+    page
+  }) => {
+    await mount(
+      <Inlay.Root defaultValue="" multiline data-testid="root">
+        {null}
+      </Inlay.Root>
+    )
+
+    const ed = page.getByRole('textbox')
+    await ed.click()
+
+    const result = await page.evaluate(async () => {
+      const editor = document.querySelector('[role="textbox"]') as HTMLElement
+
+      // Helper to dispatch beforeinput and let it be handled
+      const dispatchBeforeInput = async (
+        inputType: string,
+        data: string | null
+      ) => {
+        const event = new InputEvent('beforeinput', {
+          inputType,
+          data,
+          bubbles: true,
+          cancelable: true
+        })
+
+        const sel = window.getSelection()
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0)
+          ;(event as any).getTargetRanges = () => [
+            {
+              startContainer: range.startContainer,
+              startOffset: range.startOffset,
+              endContainer: range.endContainer,
+              endOffset: range.endOffset,
+              collapsed: range.collapsed
+            }
+          ]
+        } else {
+          ;(event as any).getTargetRanges = () => []
+        }
+
+        editor.dispatchEvent(event)
+        await new Promise((r) => setTimeout(r, 50))
+      }
+
+      // Step 1: Type "hello" (simulating char-by-char typing via swipe for simplicity)
+      await dispatchBeforeInput('insertText', 'hello')
+
+      // Step 2: Press Enter (simulated via keydown)
+      const enterEvent = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true
+      })
+      editor.dispatchEvent(enterEvent)
+      await new Promise((r) => setTimeout(r, 50))
+
+      const afterEnter = editor.innerText?.replace(/\u200B/g, '').trim()
+
+      // Step 3: Swipe " world" on the new line (iOS sends with leading space)
+      await dispatchBeforeInput('insertText', ' world')
+
+      const finalValue = editor.innerText?.replace(/\u200B/g, '')
+
+      return {
+        afterEnter,
+        finalValue,
+        startsWithSpaceOnLine2: finalValue?.split('\n')[1]?.startsWith(' ')
+      }
+    })
+
+    console.log('Swipe after newline result:', JSON.stringify(result, null, 2))
+
+    // The second line should NOT start with a space
+    expect(result.startsWithSpaceOnLine2).toBe(false)
+    // Final value should be "hello\nworld" not "hello\n world"
+    expect(result.finalValue).toMatch(/hello\n\s*world/)
+    expect(result.finalValue).not.toContain('\n ')
+  })
+
+  /**
+   * iOS sometimes sends a single space as a separate event BEFORE the swiped word.
+   * This space should be skipped entirely at the start of a line.
+   */
+  test('single space before swipe word at start of line should be skipped', async ({
+    mount,
+    page
+  }) => {
+    await mount(
+      <Inlay.Root defaultValue="" multiline data-testid="root">
+        {null}
+      </Inlay.Root>
+    )
+
+    const ed = page.getByRole('textbox')
+    await ed.click()
+
+    const result = await page.evaluate(async () => {
+      const editor = document.querySelector('[role="textbox"]') as HTMLElement
+
+      const dispatchBeforeInput = async (
+        inputType: string,
+        data: string | null
+      ) => {
+        const event = new InputEvent('beforeinput', {
+          inputType,
+          data,
+          bubbles: true,
+          cancelable: true
+        })
+
+        const sel = window.getSelection()
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0)
+          ;(event as any).getTargetRanges = () => [
+            {
+              startContainer: range.startContainer,
+              startOffset: range.startOffset,
+              endContainer: range.endContainer,
+              endOffset: range.endOffset,
+              collapsed: range.collapsed
+            }
+          ]
+        } else {
+          ;(event as any).getTargetRanges = () => []
+        }
+
+        editor.dispatchEvent(event)
+        await new Promise((r) => setTimeout(r, 50))
+      }
+
+      // Step 1: Insert "hello"
+      await dispatchBeforeInput('insertText', 'hello')
+
+      // Step 2: Press Enter
+      const enterEvent = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true
+      })
+      editor.dispatchEvent(enterEvent)
+      await new Promise((r) => setTimeout(r, 50))
+
+      // Step 3: iOS sends JUST a space first (separate event before the word)
+      await dispatchBeforeInput('insertText', ' ')
+      const afterSpace = editor.innerText?.replace(/\u200B/g, '')
+
+      // Step 4: iOS sends the actual word
+      await dispatchBeforeInput('insertText', 'world')
+      const finalValue = editor.innerText?.replace(/\u200B/g, '')
+
+      return {
+        afterSpace,
+        finalValue,
+        line2: finalValue?.split('\n')[1]
+      }
+    })
+
+    console.log(
+      'Single space before swipe result:',
+      JSON.stringify(result, null, 2)
+    )
+
+    // The space should have been skipped, so line 2 should be "world" not " world"
+    expect(result.line2).toBe('world')
+    expect(result.finalValue).not.toContain('\n ')
+  })
+})

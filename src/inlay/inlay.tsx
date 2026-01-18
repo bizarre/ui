@@ -173,7 +173,7 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
     // Mobile input attributes
     inputMode = 'text',
     autoCapitalize = 'sentences',
-    autoCorrect = 'off',
+    autoCorrect, // Omit by default - let iOS use native behavior (single-word suggestions)
     enterKeyHint,
     onVirtualKeyboardChange,
     ...inlayProps
@@ -235,6 +235,9 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
     defaultProp: defaultValue || '',
     onChange
   })
+  // Keep a ref to the current value for synchronous access in event handlers
+  const valueRef = useRef(value)
+  valueRef.current = value
   const editorRef = useRef<HTMLDivElement | null>(null)
   const placeholderRef = useRef<HTMLDivElement>(null)
   const {
@@ -338,6 +341,7 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
     suppressNextKeydownCommitRef,
     compositionJustEndedAtRef,
     setValue,
+    valueRef,
     getActiveToken: () =>
       activeTokenRef.current
         ? {

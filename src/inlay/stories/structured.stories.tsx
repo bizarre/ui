@@ -115,7 +115,6 @@ export const Structured = () => {
     <div className="bg-gray-100 p-8 flex justify-center min-h-screen items-start">
       <div className="w-full max-w-2xl bg-white rounded-xl shadow-md p-4">
         <Inlay.StructuredInlay
-          autoCorrect="on"
           plugins={[
             mentions({
               render: ({ token, update }) => (
@@ -142,6 +141,113 @@ export const Structured = () => {
             side: 'bottom',
             alignOffset: -5,
             sideOffset: 5
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// Minimal Inlay for iOS comparison testing
+export const MinimalInlay = () => {
+  return (
+    <div className="bg-gray-100 p-8 flex flex-col gap-8 min-h-screen items-center">
+      <div className="w-full max-w-2xl">
+        <h2 className="text-lg font-bold mb-2">
+          Minimal Inlay.Root (no plugins)
+        </h2>
+        <div className="w-full bg-white rounded-xl shadow-md p-4">
+          <Inlay.Root
+            placeholder="Type here..."
+            className="w-full min-h-[100px] focus:outline-none"
+          >
+            <span />
+          </Inlay.Root>
+        </div>
+      </div>
+
+      <div className="w-full max-w-2xl">
+        <h2 className="text-lg font-bold mb-2">StructuredInlay (no plugins)</h2>
+        <div className="w-full bg-white rounded-xl shadow-md p-4">
+          <Inlay.StructuredInlay
+            plugins={[]}
+            placeholder="Type here..."
+            className="w-full min-h-[100px] focus:outline-none"
+          >
+            <span />
+          </Inlay.StructuredInlay>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Naked contentEditable for iOS comparison testing
+export const NakedContentEditable = () => {
+  const [value, setValue] = React.useState('')
+
+  return (
+    <div className="bg-gray-100 p-8 flex flex-col gap-8 min-h-screen items-center">
+      <div className="w-full max-w-2xl">
+        <h2 className="text-lg font-bold mb-2">Naked (no JS handling)</h2>
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          className="w-full bg-white rounded-xl shadow-md p-4 min-h-[100px] focus:outline-none"
+        />
+      </div>
+
+      <div className="w-full max-w-2xl">
+        <h2 className="text-lg font-bold mb-2">
+          With preventDefault on beforeinput
+        </h2>
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          className="w-full bg-white rounded-xl shadow-md p-4 min-h-[100px] focus:outline-none"
+          onBeforeInput={(e) => {
+            e.preventDefault()
+            // Manually update - this mimics what Inlay does
+            const target = e.currentTarget
+            const data = (e.nativeEvent as InputEvent).data
+            if (data) {
+              target.textContent = (target.textContent || '') + data
+            }
+          }}
+        />
+      </div>
+
+      <div className="w-full max-w-2xl">
+        <h2 className="text-lg font-bold mb-2">With React controlled state</h2>
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          className="w-full bg-white rounded-xl shadow-md p-4 min-h-[100px] focus:outline-none"
+          onInput={(e) => {
+            setValue(e.currentTarget.textContent || '')
+          }}
+        >
+          {value}
+        </div>
+      </div>
+
+      <div className="w-full max-w-2xl">
+        <h2 className="text-lg font-bold mb-2">
+          Handle on input instead of beforeinput
+        </h2>
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          className="w-full bg-white rounded-xl shadow-md p-4 min-h-[100px] focus:outline-none"
+          onBeforeInput={() => {
+            // Don't prevent - just let iOS do its thing
+            console.log('[test] beforeinput - NOT preventing')
+          }}
+          onInput={(e) => {
+            // Read the DOM after iOS modified it
+            const newText = e.currentTarget.textContent || ''
+            console.log('[test] input - syncing from DOM:', newText)
+            setValue(newText)
           }}
         />
       </div>

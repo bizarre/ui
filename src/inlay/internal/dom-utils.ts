@@ -67,6 +67,30 @@ export const getTextNodeAtOffset = (
       if (child.nodeType === Node.ELEMENT_NODE) {
         const el = child as Element
 
+        // <br> represents a newline character - count as 1
+        // If we're at the position right after a <br>, return the next text node
+        if (el.tagName === 'BR') {
+          if (remaining.value === 0) {
+            // Position is right at the <br> - find next text node
+            // Look for the next sibling text node or continue traversal
+            for (let j = i + 1; j < children.length; j++) {
+              const next = children[j]
+              if (next.nodeType === Node.TEXT_NODE) {
+                return [next as ChildNode, 0]
+              }
+              if (next.nodeType === Node.ELEMENT_NODE) {
+                const nextEl = next as Element
+                const first = findFirstTextNode(nextEl)
+                if (first) return [first, 0]
+              }
+            }
+            // No next text node found - return null
+            return null
+          }
+          remaining.value -= 1
+          continue
+        }
+
         if (isTokenElement(el)) {
           const rawLen = getTokenRawLength(el)
           const renderedLen = getRenderedTextLength(el)
@@ -173,6 +197,8 @@ export const getAbsoluteOffset = (
       }
       if (n.nodeType === Node.ELEMENT_NODE) {
         const e = n as Element
+        // <br> represents a newline character
+        if (e.tagName === 'BR') return 1
         if (isTokenElement(e)) return getTokenRawLength(e)
         let sum = 0
         for (let i = 0; i < e.childNodes.length; i++) {
@@ -221,11 +247,19 @@ export const getAbsoluteOffset = (
           continue
         }
 
+        // <br> represents a newline character - count as 1 and continue
+        if (el.tagName === 'BR') {
+          acc.value += 1
+          continue
+        }
+
         if (el.contains(node)) {
           const inner = traverse(el, acc)
           if (inner != null) return inner
         } else {
           const measureSubtree = (e: Element): number => {
+            // <br> represents a newline character
+            if (e.tagName === 'BR') return 1
             let total = 0
             const cn = e.childNodes
             for (let j = 0; j < cn.length; j++) {
@@ -324,5 +358,24 @@ export const serializeRawFromDom = (root: HTMLElement): string => {
       ;(el as HTMLElement).textContent = raw
     }
   })
-  return (clone as HTMLElement).innerText
+  let result = (clone as HTMLElement).innerText
+  // iOS contentEditable often has trailing newlines, zero-width spaces, or other
+  // invisible characters when "empty". Strip these from the end.
+  // Also handle the case where the entire content is just whitespace/invisible chars.
+  result = result.replace(/[\u200B\uFEFF]+/g, '') // Remove zero-width spaces throughout
+
+  // Handle empty content (just newlines or whitespace)
+  if (result === '\n' || result.trim() === '') {
+    return ''
+  }
+
+  // ContentEditable often adds ONE extra trailing newline. Remove it if present.
+  // But preserve intentional newlines in the content (e.g., "hello\nworld\n" → "hello\nworld")
+  // This is tricky: we can't know if the final newline is intentional or added by browser.
+  // Heuristic: if it ends with double newline, remove one. Single trailing newline stays.
+  if (result.endsWith('\n\n')) {
+    result = result.slice(0, -1)
+  }
+
+  return result
 }

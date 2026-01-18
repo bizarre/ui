@@ -23,7 +23,8 @@ test.describe('Mobile touch interaction', () => {
     const editor = page.getByRole('textbox')
     await expect(editor).toHaveAttribute('inputmode', 'text')
     await expect(editor).toHaveAttribute('autocapitalize', 'sentences')
-    await expect(editor).toHaveAttribute('autocorrect', 'off')
+    // Note: autoCorrect is intentionally omitted (undefined) to let iOS use native behavior
+    // for keyboard suggestions. When not set, iOS defaults to system settings.
     await expect(editor).toHaveAttribute('spellcheck', 'false')
   })
 

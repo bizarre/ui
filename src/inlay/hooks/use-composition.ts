@@ -29,27 +29,33 @@ export function useComposition(
   // Track last composition data for iOS workaround
   const lastCompositionDataRef = useRef<string>('')
 
-  const onCompositionStart = useCallback(() => {
-    if (!editorRef.current) return
-    isComposingRef.current = true
-    setIsComposing(true)
-    const sel = window.getSelection()
-    if (sel && sel.rangeCount > 0) {
-      const r = sel.getRangeAt(0)
-      const start = getAbsoluteOffset(
-        editorRef.current,
-        r.startContainer,
-        r.startOffset
-      )
-      const end = getAbsoluteOffset(
-        editorRef.current,
-        r.endContainer,
-        r.endOffset
-      )
-      compositionStartSelectionRef.current = { start, end }
-    }
-    compositionInitialValueRef.current = getCurrentValue()
-  }, [editorRef, getCurrentValue])
+  const onCompositionStart = useCallback(
+    (event: React.CompositionEvent<HTMLDivElement>) => {
+      console.log('[compositionstart]', {
+        data: event.data
+      })
+      if (!editorRef.current) return
+      isComposingRef.current = true
+      setIsComposing(true)
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0) {
+        const r = sel.getRangeAt(0)
+        const start = getAbsoluteOffset(
+          editorRef.current,
+          r.startContainer,
+          r.startOffset
+        )
+        const end = getAbsoluteOffset(
+          editorRef.current,
+          r.endContainer,
+          r.endOffset
+        )
+        compositionStartSelectionRef.current = { start, end }
+      }
+      compositionInitialValueRef.current = getCurrentValue()
+    },
+    [editorRef, getCurrentValue]
+  )
 
   const onCompositionUpdate = useCallback(
     (event: React.CompositionEvent<HTMLDivElement>) => {
@@ -65,6 +71,12 @@ export function useComposition(
 
   const onCompositionEnd = useCallback(
     (event: React.CompositionEvent<HTMLDivElement>) => {
+      const eventData = (event as unknown as { data?: string }).data
+      console.log('[compositionend]', {
+        data: eventData,
+        lastCompositionData: lastCompositionDataRef.current
+      })
+
       const root = editorRef.current
       if (!root) {
         isComposingRef.current = false
@@ -72,6 +84,7 @@ export function useComposition(
         return
       }
       suppressNextBeforeInputRef.current = true
+      console.log('[compositionend] setting suppressNextBeforeInput = true')
 
       // Build committed value
       let committed = (event as unknown as { data?: string }).data || ''
