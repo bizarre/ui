@@ -1,3 +1,41 @@
+# [2.0.0](https://github.com/bizarre/ui/compare/v1.4.0...v2.0.0) (2026-01-18)
+
+
+* Merge pull request [#1](https://github.com/bizarre/ui/issues/1) from bizarre/inlay ([89c5736](https://github.com/bizarre/ui/commit/89c5736bc085d47563ddd9aadb23be6ed8e7bed0))
+
+
+### Bug Fixes
+
+* better clipboard handling ([fcd7006](https://github.com/bizarre/ui/commit/fcd700688080c9b86ce613592773184fd8ae3ef2))
+* empty state caret rendering ([b8602d6](https://github.com/bizarre/ui/commit/b8602d6a68864051e970e80a34230bdcf10478a0))
+* **inlay:** autocomplete ([bcab1c8](https://github.com/bizarre/ui/commit/bcab1c8bd554ae5097407af8cb7174e836782124))
+* **inlay:** IME composition ([3d9aeb3](https://github.com/bizarre/ui/commit/3d9aeb3a1e8aa24cb06bcbcb43baec812e61d48b))
+* **inlay:** prevent crash and caret issues with many diverging tokens ([130dcac](https://github.com/bizarre/ui/commit/130dcac0c3ae1776bcd85ccd194c520dabe27c62))
+* performance, flaky tests, etc ([bc245b0](https://github.com/bizarre/ui/commit/bc245b023179301182878cdf2584505c74b49af5))
+* tests ([1f6c9c9](https://github.com/bizarre/ui/commit/1f6c9c9bf0344ba0baf23d60d9db8bfeec121713))
+* **tests:** update tests ([37efaf8](https://github.com/bizarre/ui/commit/37efaf8a89cb45de60042c5c23fd1971d62043b5))
+* **vitest:** exclude ct tests ([65fa72c](https://github.com/bizarre/ui/commit/65fa72c341d06d11c200af391ccda23b8e125a41))
+
+
+### Features
+
+* handle overlapping matches better ([2cdea0d](https://github.com/bizarre/ui/commit/2cdea0d7db9aac64681a02bc5829ef87c69e6d33))
+* **inlay:** init ([8c792ce](https://github.com/bizarre/ui/commit/8c792cee926f23e89a4c4653b9fc18dc324983d9))
+* **inlay:** portal improvements ([b5ad6ce](https://github.com/bizarre/ui/commit/b5ad6ce0eb4235092e62e9d7902885eccfdede63))
+* mobile ([0626207](https://github.com/bizarre/ui/commit/06262072b1f964308c5ec16a411cf3f029881692))
+* portal rework ([b801fb3](https://github.com/bizarre/ui/commit/b801fb370197bb8a28cc1e5eb43f3858d1288c91))
+* **structured-inlay:** portal anchor ([5c26a96](https://github.com/bizarre/ui/commit/5c26a9699e4d841bc8fd45d0bc0a3d4b950493aa))
+* **structured-inlay:** stable token ids ([d48c109](https://github.com/bizarre/ui/commit/d48c10923ce047086815f796a542d376bb10842d))
+* **tests:** run playwright tests in CI ([ca477d0](https://github.com/bizarre/ui/commit/ca477d091cf103f37e847d5b3976f6a9bbd7e813))
+
+
+### BREAKING CHANGES
+
+* - feat: new component "Inlay", structured text input primitive
+- tests: playwright ct testing
+- refactor: timeslice -> chrono
+- chore: landing page rework
+
 # [1.4.0](https://github.com/bizarre/ui/compare/v1.3.0...v1.4.0) (2025-05-08)
 
 
