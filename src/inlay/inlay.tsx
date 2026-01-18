@@ -53,6 +53,12 @@ const PortalKeyboardContext = createContext<PortalKeyboardContextValue | null>(
 )
 export { PortalKeyboardContext }
 
+// Context for anchor rect - allows Portal to position itself based on caret position
+type AnchorRectContextValue = {
+  getRect: () => DOMRect
+}
+const AnchorRectContext = createContext<AnchorRectContextValue | null>(null)
+
 function annotateWithAncestor(
   node: React.ReactNode,
   currentAncestor: React.ReactElement | null
@@ -207,7 +213,25 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
     }),
     []
   )
-  const lastAnchorRectRef = useRef<DOMRect>(new DOMRect(0, 0, 0, 0))
+  const popoverControl = useMemo(() => ({ setOpen: setIsPopoverOpen }), [])
+  const [value, setValue] = useControllableState({
+    prop: valueProp,
+    defaultProp: defaultValue || '',
+    onChange
+  })
+  // Keep a ref to the current value for synchronous access in event handlers
+  const valueRef = useRef(value)
+  valueRef.current = value
+  const editorRef = useRef<HTMLDivElement | null>(null)
+  const placeholderRef = useRef<HTMLDivElement>(null)
+  const {
+    selection,
+    setSelection,
+    setSelectionImperative,
+    handleSelectionChange,
+    lastAnchorRectRef,
+    suppressNextSelectionAdjustRef
+  } = useSelection(editorRef, value)
   const virtualAnchorRef = useRef({
     getBoundingClientRect: () => lastAnchorRectRef.current
   })
@@ -229,24 +253,6 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
   const chosenAnchorRef = getPopoverAnchorRect
     ? customAnchorRef
     : virtualAnchorRef
-  const popoverControl = useMemo(() => ({ setOpen: setIsPopoverOpen }), [])
-  const [value, setValue] = useControllableState({
-    prop: valueProp,
-    defaultProp: defaultValue || '',
-    onChange
-  })
-  // Keep a ref to the current value for synchronous access in event handlers
-  const valueRef = useRef(value)
-  valueRef.current = value
-  const editorRef = useRef<HTMLDivElement | null>(null)
-  const placeholderRef = useRef<HTMLDivElement>(null)
-  const {
-    selection,
-    setSelection,
-    setSelectionImperative,
-    handleSelectionChange,
-    suppressNextSelectionAdjustRef
-  } = useSelection(editorRef, value)
   const {
     isRegistered,
     registerToken,
@@ -474,9 +480,16 @@ const Inlay = React.forwardRef<InlayRef, InlayProps>((props, forwardedRef) => {
                 </div>
               )}
             </div>
-            <PortalKeyboardContext.Provider value={portalKeyboardContext}>
-              {popoverPortal}
-            </PortalKeyboardContext.Provider>
+            <AnchorRectContext.Provider
+              value={useMemo(
+                () => ({ getRect: () => lastAnchorRectRef.current }),
+                []
+              )}
+            >
+              <PortalKeyboardContext.Provider value={portalKeyboardContext}>
+                {popoverPortal}
+              </PortalKeyboardContext.Provider>
+            </AnchorRectContext.Provider>
           </PublicInlayProvider>
         </InternalInlayProvider>
       </Popover.Root>
@@ -495,30 +508,109 @@ type PortalProps = ScopedProps<
 >
 
 const Portal = (props: PortalProps) => {
-  const { __scope, children, ...contentProps } = props
+  const {
+    __scope,
+    children,
+    side = 'bottom',
+    sideOffset = 0,
+    alignOffset = 0,
+    ...contentProps
+  } = props
   const context = usePublicInlayContext(COMPONENT_NAME, __scope)
   const popoverControl = useContext(PopoverControlContext)
   const keyboardContext = useContext(PortalKeyboardContext)
+  const anchorRectContext = useContext(AnchorRectContext)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const content = children(context)
+  const hasContent = !!content
+
+  // Track last content to avoid flashing during timing gaps between render and effects
+  const lastContentRef = useRef<React.ReactNode>(null)
+  const closeTimeoutRef = useRef<number | null>(null)
+
+  if (hasContent) {
+    lastContentRef.current = content
+    if (closeTimeoutRef.current !== null) {
+      clearTimeout(closeTimeoutRef.current)
+      closeTimeoutRef.current = null
+    }
+  }
 
   useLayoutEffect(() => {
-    popoverControl?.setOpen(!!content)
-  }, [content, popoverControl])
+    if (hasContent) {
+      popoverControl?.setOpen(true)
+    } else {
+      // Defer close to allow effects to catch up
+      if (closeTimeoutRef.current !== null)
+        clearTimeout(closeTimeoutRef.current)
+      closeTimeoutRef.current = window.setTimeout(() => {
+        closeTimeoutRef.current = null
+        popoverControl?.setOpen(false)
+        lastContentRef.current = null
+      }, 50)
+    }
+    return () => {
+      if (closeTimeoutRef.current !== null) {
+        clearTimeout(closeTimeoutRef.current)
+        closeTimeoutRef.current = null
+      }
+    }
+  }, [hasContent, popoverControl])
 
-  if (!content) return null
+  // Position manually via DOM to follow caret on iOS and avoid re-render loops
+  useLayoutEffect(() => {
+    const el = contentRef.current
+    if (!el || !anchorRectContext) return
+
+    const rect = anchorRectContext.getRect()
+    if (rect.x === 0 && rect.y === 0 && rect.width === 0 && rect.height === 0)
+      return
+
+    let top: number, left: number
+    if (side === 'bottom') {
+      top = rect.bottom + sideOffset
+      left = rect.left + alignOffset
+    } else if (side === 'top') {
+      top = rect.top - el.offsetHeight - sideOffset
+      left = rect.left + alignOffset
+    } else if (side === 'left') {
+      top = rect.top + alignOffset
+      left = rect.left - el.offsetWidth - sideOffset
+    } else {
+      top = rect.top + alignOffset
+      left = rect.right + sideOffset
+    }
+
+    el.style.top = `${top}px`
+    el.style.left = `${left}px`
+    el.style.visibility = 'visible'
+  })
+
+  const displayContent = content || lastContentRef.current
+
+  if (!displayContent) return null
 
   return (
-    <Popover.Content
-      onOpenAutoFocus={(e) => e.preventDefault()}
-      side="bottom"
-      align="center"
-      {...contentProps}
-    >
-      <PortalKeyboardContext.Provider value={keyboardContext}>
-        {content}
-      </PortalKeyboardContext.Provider>
-    </Popover.Content>
+    <Popover.Portal>
+      <div
+        ref={contentRef}
+        onFocus={(e) => e.preventDefault()}
+        {...contentProps}
+        style={{
+          ...contentProps.style,
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          zIndex: 50,
+          visibility: 'hidden' // Made visible by useLayoutEffect after positioning
+        }}
+      >
+        <PortalKeyboardContext.Provider value={keyboardContext}>
+          {displayContent}
+        </PortalKeyboardContext.Provider>
+      </div>
+    </Popover.Portal>
   )
 }
 Portal.displayName = 'Inlay.Portal'

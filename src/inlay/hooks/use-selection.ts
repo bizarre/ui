@@ -4,6 +4,12 @@ import { snapGraphemeEnd, snapGraphemeStart } from '../internal/string-utils'
 
 export type SelectionState = { start: number; end: number }
 
+// Detect iOS Safari - includes modern iPads that report as "MacIntel" with touch
+const isIOS =
+  typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+
 export function useSelection(
   editorRef: React.RefObject<HTMLDivElement | null>,
   value: string
@@ -18,6 +24,24 @@ export function useSelection(
   })
   const suppressNextSelectionAdjustRef = useRef(false)
 
+  // Update just the anchor rect from current selection
+  const updateAnchorRect = useCallback(() => {
+    const domSelection = window.getSelection()
+    if (!domSelection || !domSelection.rangeCount) return
+
+    const range = domSelection.getRangeAt(0)
+    const clientRect =
+      range.getClientRects()[0] || range.getBoundingClientRect()
+    if (!(clientRect.x === 0 && clientRect.y === 0)) {
+      lastAnchorRectRef.current = new DOMRect(
+        clientRect.x,
+        clientRect.y,
+        clientRect.width,
+        clientRect.height
+      )
+    }
+  }, [])
+
   const handleSelectionChange = useCallback(() => {
     if (!editorRef.current) return
 
@@ -31,17 +55,8 @@ export function useSelection(
 
     const range = domSelection.getRangeAt(0)
 
-    // Compute candidate rect; prefer first client rect if available
-    const clientRect =
-      range.getClientRects()[0] || range.getBoundingClientRect()
-    if (!(clientRect.x === 0 && clientRect.y === 0)) {
-      lastAnchorRectRef.current = new DOMRect(
-        clientRect.x,
-        clientRect.y,
-        clientRect.width,
-        clientRect.height
-      )
-    }
+    // Update anchor rect
+    updateAnchorRect()
 
     if (!editorRef.current.contains(range.startContainer)) {
       return
@@ -58,7 +73,7 @@ export function useSelection(
       range.endOffset
     )
     setSelection({ start, end })
-  }, [editorRef])
+  }, [editorRef, updateAnchorRect])
 
   const setSelectionImperative = useCallback(
     (start: number, end?: number) => {
@@ -105,6 +120,48 @@ export function useSelection(
       )
     }
   }, [editorRef, handleSelectionChange])
+
+  // iOS: Update anchor rect after input/viewport changes (caret rect can be stale)
+  useEffect(() => {
+    if (!isIOS) return
+
+    let rafId: number | null = null
+    const deferredUpdate = () => {
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        updateAnchorRect()
+      })
+    }
+
+    const handleInput = (e: Event) => {
+      const root = editorRef.current
+      if (root?.contains(e.target as Node)) deferredUpdate()
+    }
+
+    const handleViewportChange = () => {
+      const root = editorRef.current
+      if (
+        root &&
+        (document.activeElement === root ||
+          root.contains(document.activeElement))
+      ) {
+        deferredUpdate()
+      }
+    }
+
+    document.addEventListener('input', handleInput, true)
+    const vv = window.visualViewport
+    vv?.addEventListener('resize', handleViewportChange)
+    vv?.addEventListener('scroll', handleViewportChange)
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      document.removeEventListener('input', handleInput, true)
+      vv?.removeEventListener('resize', handleViewportChange)
+      vv?.removeEventListener('scroll', handleViewportChange)
+    }
+  }, [editorRef, updateAnchorRect])
 
   return {
     selection,

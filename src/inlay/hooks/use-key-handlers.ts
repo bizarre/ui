@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import {
   getAbsoluteOffset,
+  getClosestTokenEl,
   setDomSelection,
   serializeRawFromDom
 } from '../internal/dom-utils'
@@ -142,22 +143,23 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
 
       // Handle text insertions (insertText and insertReplacementText)
       if (inputType === 'insertText' || inputType === 'insertReplacementText') {
-        // iOS handling strategy:
-        // - WITHOUT newlines: Let iOS modify DOM, sync via input handler (prevents multi-word suggestions)
-        // - WITH newlines: Must call preventDefault to avoid React crash with <br> elements
-        //   But we need to ensure we have the insertion data before preventing.
-
-        // Use valueRef to check for newlines - DOM might not be updated yet after Enter
+        // iOS handling: Let iOS modify DOM directly (prevents multi-word suggestions)
+        // EXCEPT when: has newlines (React crash) or in token context (stale DOM attributes)
         const hasNewlines = cfg.valueRef.current.includes('\n')
+        const domSelection = window.getSelection()
+        const range = domSelection?.rangeCount
+          ? domSelection.getRangeAt(0)
+          : null
+        const isInTokenContext = range
+          ? !!getClosestTokenEl(range.startContainer)
+          : false
 
-        // Get insertion data - needed for controlled path
         const insertData =
           inputType === 'insertReplacementText'
             ? (data ?? event.dataTransfer?.getData('text/plain'))
             : data
 
-        if (isIOS && !hasNewlines) {
-          // No newlines: Let iOS modify DOM, sync via input handler
+        if (isIOS && !hasNewlines && !isInTokenContext) {
           return
         }
 
@@ -460,6 +462,8 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
                 cursorPos > active.start &&
                 cursorPos <= active.end
               )
+              // Clear swipe-text tracking when near a token
+              if (active) lastMultiCharInsertRef.current = null
               if (insideToken) {
                 const delStart = cursorPos - 1
                 before = currentValue.slice(0, delStart)
@@ -596,6 +600,14 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
         // Autocomplete typically replaces text mid-word.
         const isSwipeText = inputType === 'insertText'
 
+        // Check if cursor is in a token - skip swipe-text tracking if so
+        const range = domSelection?.rangeCount
+          ? domSelection.getRangeAt(0)
+          : null
+        const isInTokenContext = range
+          ? !!getClosestTokenEl(range.startContainer)
+          : false
+
         // We need to track if we added a space so we can adjust cursor position
         let addedSpace = false
 
@@ -634,18 +646,13 @@ export function useKeyHandlers(cfg: KeyHandlersConfig) {
           const adjustedInsertedLength = finalValue.length - oldValue.length
           const adjustedInsertStart = adjustedCursorPos - adjustedInsertedLength
 
-          // iOS swipe auto-space and autocomplete detection:
-          //
-          // We need to distinguish:
-          // - Swipe-typing: User swipes to type a whole new word → backspace deletes whole word
-          // - Autocomplete: User types "hel", taps "hello" → backspace deletes char-by-char
-          //
-          // Key insight: Autocomplete EXTENDS the last word in oldValue.
-          // Swipe-typing ADDS a new word after a space or at the start.
-          //
-          // So: if oldValue ends with a non-space character (mid-word), this is autocomplete.
-          // If oldValue ends with space/newline or is empty, this is swipe-typing.
-          if (
+          // Swipe-text vs autocomplete detection:
+          // - Swipe-typing: after space/start → track for whole-word deletion
+          // - Autocomplete: mid-word extension → char-by-char deletion
+          // - Token context: always char-by-char deletion
+          if (isInTokenContext) {
+            lastMultiCharInsertRef.current = null
+          } else if (
             isSwipeText &&
             adjustedInsertedLength > 1 &&
             adjustedInsertStart >= 0
